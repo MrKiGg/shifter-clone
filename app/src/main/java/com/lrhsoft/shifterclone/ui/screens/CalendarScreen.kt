@@ -106,20 +106,17 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Navegación mes
             MonthHeader(
                 yearMonth = state.currentMonth,
                 onPrevious = { viewModel.previousMonth() },
                 onNext = { viewModel.nextMonth() }
             )
 
-            // Selector de modo
             ModeSelector(
                 mode = state.editMode,
                 onModeChange = { viewModel.setEditMode(it) }
             )
 
-            // Paleta de turnos
             ShiftPalette(
                 shifts = state.shifts,
                 selectedId = state.selectedShiftId,
@@ -127,7 +124,6 @@ fun CalendarScreen(
                 onLongClick = { viewModel.openEditShift(it) }
             )
 
-            // Acciones de rango (solo en modo EDIT)
             if (state.editMode == EditMode.EDIT) {
                 RangeActions(
                     hasRange = state.selectedRange != null,
@@ -140,7 +136,6 @@ fun CalendarScreen(
                 )
             }
 
-            // Cuadrícula del mes
             MonthGrid(
                 yearMonth = state.currentMonth,
                 assignments = state.assignments,
@@ -153,13 +148,12 @@ fun CalendarScreen(
         }
     }
 
-    // Diálogos / sheets
     if (state.showShiftEditor) {
         ShiftEditorDialog(
             shift = state.editingShift,
             onDismiss = { viewModel.dismissShiftEditor() },
             onSave = { viewModel.saveShift(it) },
-            onDelete = if (state.editingShift != null) {{ viewModel.deleteShift(it) }} else null
+            onDelete = if (state.editingShift != null) { shift: Shift -> viewModel.deleteShift(shift) } else null
         )
     }
 
@@ -207,7 +201,7 @@ fun CalendarScreen(
             onRequestPermission = { },
             onExportToCalendar = { viewModel.exportToDeviceCalendar() },
             onShareIcs = {
-                viewModel.buildIcsShareIntent()?.let { /* handled by Activity if needed */ }
+                viewModel.buildIcsShareIntent()?.let { /* share via Activity if needed */ }
             },
             onDismiss = { viewModel.dismissExport() }
         )
