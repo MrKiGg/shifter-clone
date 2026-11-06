@@ -58,7 +58,7 @@ class TodayWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(bg, bg))
+                        .background(ColorProvider(bg))
                         .padding(12.dp)
                         .clickable(actionStartActivity<MainActivity>()),
                     verticalAlignment = Alignment.CenterVertically
@@ -67,7 +67,7 @@ class TodayWidget : GlanceAppWidget() {
                         text = "$dayName ${today.dayOfMonth}/${today.monthValue}",
                         style = TextStyle(
                             fontSize = 12.sp,
-                            color = ColorProvider(fg.copy(alpha = 0.85f), fg.copy(alpha = 0.85f))
+                            color = ColorProvider(fg.copy(alpha = 0.85f))
                         )
                     )
                     Text(
@@ -75,7 +75,7 @@ class TodayWidget : GlanceAppWidget() {
                         style = TextStyle(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = ColorProvider(fg, fg)
+                            color = ColorProvider(fg)
                         )
                     )
                     if (schedule.isNotEmpty()) {
@@ -83,7 +83,7 @@ class TodayWidget : GlanceAppWidget() {
                             text = schedule,
                             style = TextStyle(
                                 fontSize = 12.sp,
-                                color = ColorProvider(fg.copy(alpha = 0.9f), fg.copy(alpha = 0.9f))
+                                color = ColorProvider(fg.copy(alpha = 0.9f))
                             )
                         )
                     }

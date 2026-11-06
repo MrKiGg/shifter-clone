@@ -22,7 +22,6 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.defaultWeight
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -50,7 +49,7 @@ class MonthCalendarWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(Color.White, Color(0xFF1E1E1E)))
+                        .background(ColorProvider(Color.White))
                         .padding(8.dp)
                         .clickable(actionStartActivity<MainActivity>())
                 ) {
@@ -59,12 +58,11 @@ class MonthCalendarWidget : GlanceAppWidget() {
                         style = TextStyle(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = ColorProvider(Color(0xFFD32F2F), Color(0xFFEF5350))
+                            color = ColorProvider(Color(0xFFD32F2F))
                         ),
                         modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)
                     )
 
-                    // Cabecera L M X J V S D
                     Row(modifier = GlanceModifier.fillMaxWidth()) {
                         listOf("L", "M", "X", "J", "V", "S", "D").forEach { d ->
                             Text(
@@ -73,9 +71,9 @@ class MonthCalendarWidget : GlanceAppWidget() {
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     textAlign = TextAlign.Center,
-                                    color = ColorProvider(Color.Gray, Color.LightGray)
+                                    color = ColorProvider(Color.Gray)
                                 ),
-                                modifier = GlanceModifier.defaultWeight()
+                                modifier = GlanceModifier
                             )
                         }
                     }
@@ -90,7 +88,7 @@ class MonthCalendarWidget : GlanceAppWidget() {
                                     currentMonth = yearMonth,
                                     today = today,
                                     snapshot = snapshot,
-                                    modifier = GlanceModifier.defaultWeight()
+                                    modifier = GlanceModifier
                                 )
                             }
                         }
@@ -131,7 +129,7 @@ private fun MonthDayCell(
     Column(
         modifier = modifier
             .padding(1.dp)
-            .background(ColorProvider(bg, bg))
+            .background(ColorProvider(bg))
             .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -140,7 +138,7 @@ private fun MonthDayCell(
             style = TextStyle(
                 fontSize = 11.sp,
                 fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
-                color = ColorProvider(textColor, textColor),
+                color = ColorProvider(textColor),
                 textAlign = TextAlign.Center
             )
         )
@@ -150,7 +148,7 @@ private fun MonthDayCell(
                 style = TextStyle(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = ColorProvider(textColor, textColor),
+                    color = ColorProvider(textColor),
                     textAlign = TextAlign.Center
                 )
             )

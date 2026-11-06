@@ -22,7 +22,6 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.defaultWeight
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -45,7 +44,7 @@ class WeekWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(Color.White, Color(0xFF1E1E1E)))
+                        .background(ColorProvider(Color.White))
                         .padding(8.dp)
                         .clickable(actionStartActivity<MainActivity>())
                 ) {
@@ -54,7 +53,7 @@ class WeekWidget : GlanceAppWidget() {
                         style = TextStyle(
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = ColorProvider(Color(0xFFD32F2F), Color(0xFFEF5350))
+                            color = ColorProvider(Color(0xFFD32F2F))
                         ),
                         modifier = GlanceModifier.padding(bottom = 6.dp)
                     )
@@ -65,7 +64,7 @@ class WeekWidget : GlanceAppWidget() {
                                 date = date,
                                 today = today,
                                 snapshot = snapshot,
-                                modifier = GlanceModifier.defaultWeight()
+                                modifier = GlanceModifier
                             )
                         }
                     }
@@ -97,7 +96,7 @@ private fun WeekDayCell(
     Column(
         modifier = modifier
             .padding(horizontal = 2.dp)
-            .background(ColorProvider(bg, bg))
+            .background(ColorProvider(bg))
             .padding(vertical = 6.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -105,7 +104,7 @@ private fun WeekDayCell(
             text = dayLabel,
             style = TextStyle(
                 fontSize = 10.sp,
-                color = ColorProvider(fg.copy(alpha = 0.8f), fg.copy(alpha = 0.8f)),
+                color = ColorProvider(fg.copy(alpha = 0.8f)),
                 textAlign = TextAlign.Center
             )
         )
@@ -114,7 +113,7 @@ private fun WeekDayCell(
             style = TextStyle(
                 fontSize = 13.sp,
                 fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
-                color = ColorProvider(fg, fg),
+                color = ColorProvider(fg),
                 textAlign = TextAlign.Center
             )
         )
@@ -124,7 +123,7 @@ private fun WeekDayCell(
             style = TextStyle(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = ColorProvider(fg, fg),
+                color = ColorProvider(fg),
                 textAlign = TextAlign.Center
             )
         )
