@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shifter Clone</string>
+    <string name="widget_month_description">Calendario mensual de turnos</string>
+    <string name="widget_today_description">Turno de hoy</string>
+    <string name="widget_week_description">Turnos de la semana</string>
+</resources>
