@@ -10,7 +10,6 @@ import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.lrhsoft.shifterclone.MainActivity
-import com.lrhsoft.shifterclone.R
 
 class AlarmReceiver : BroadcastReceiver() {
 
