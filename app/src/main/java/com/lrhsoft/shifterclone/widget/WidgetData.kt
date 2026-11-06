@@ -14,7 +14,7 @@ data class WidgetSnapshot(
     val shifts: List<Shift>,
     val assignments: Map<String, DayAssignment>
 ) {
-    private val shiftMap by lazy { shifts.associateBy { it.id }
+    private val shiftMap by lazy { shifts.associateBy { it.id } }
 
     fun shiftsFor(date: LocalDate): List<Shift> {
         val key = "${date.year}-${date.monthValue}-${date.dayOfMonth}"
@@ -24,7 +24,7 @@ data class WidgetSnapshot(
 
     fun labelFor(date: LocalDate): String {
         val list = shiftsFor(date)
-        return if (list.isEmpty()) "—" else list.joinToString("+") { it.abbreviation }
+        return if (list.isEmpty()) "\u2014" else list.joinToString("+") { it.abbreviation }
     }
 
     fun colorFor(date: LocalDate): Long? =
