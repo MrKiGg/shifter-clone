@@ -45,20 +45,20 @@ fun CalendarDayCell(
 ) {
     val shape = RoundedCornerShape(0.dp)
 
-    // Bordes negros en días del mes actual (como la app original)
+    // Bordes interiores claros; el contorno exterior fuerte lo pinta el grid
     val borderWidth = when {
-        isRangeEndpoint -> 2.5.dp
+        isRangeEndpoint -> 2.dp
         isInRange -> 1.5.dp
         isToday -> 1.5.dp
-        isCurrentMonth -> 1.dp
-        else -> 0.5.dp
+        isCurrentMonth -> 0.5.dp
+        else -> 0.4.dp
     }
     val borderColor = when {
         isRangeEndpoint -> Color(0xFFD32F2F)
         isInRange -> Color(0xFFD32F2F).copy(alpha = 0.65f)
         isToday -> Color(0xFFD32F2F)
-        isCurrentMonth -> Color.Black
-        else -> Color(0xFFBDBDBD)
+        isCurrentMonth -> Color(0xFFB0B0B0)
+        else -> Color(0xFFD0D0D0)
     }
 
     val contentColor = when {
