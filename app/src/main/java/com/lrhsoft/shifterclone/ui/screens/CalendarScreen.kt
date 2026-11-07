@@ -5,6 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -165,18 +172,46 @@ fun CalendarScreen(
                 onNext = { viewModel.nextMonth() }
             )
 
-            MonthGrid(
+            AnimatedContent(
+                targetState = state.currentMonth,
+                transitionSpec = {
+                    val forward = targetState > initialState
+                    if (forward) {
+                        (slideInHorizontally(
+                            animationSpec = tween(280),
+                            initialOffsetX = { it }
+                        ) + fadeIn(animationSpec = tween(220))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = tween(280),
+                                targetOffsetX = { -it / 3 }
+                            ) + fadeOut(animationSpec = tween(180)))
+                    } else {
+                        (slideInHorizontally(
+                            animationSpec = tween(280),
+                            initialOffsetX = { -it }
+                        ) + fadeIn(animationSpec = tween(220))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = tween(280),
+                                targetOffsetX = { it / 3 }
+                            ) + fadeOut(animationSpec = tween(180)))
+                    }
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                yearMonth = state.currentMonth,
-                assignments = state.assignments,
-                shifts = state.shifts,
-                notes = state.notes,
-                selectedRange = state.selectedRange,
-                onDayClick = { y, m, d -> viewModel.onDayClicked(y, m, d) },
-                onDayLongClick = { y, m, d -> viewModel.onDayLongPressed(y, m, d) }
-            )
+                label = "monthTransition"
+            ) { month ->
+                MonthGrid(
+                    modifier = Modifier.fillMaxSize(),
+                    yearMonth = month,
+                    assignments = state.assignments,
+                    shifts = state.shifts,
+                    notes = state.notes,
+                    selectedRange = state.selectedRange,
+                    onDayClick = { y, m, d -> viewModel.onDayClicked(y, m, d) },
+                    onDayLongClick = { y, m, d -> viewModel.onDayLongPressed(y, m, d) }
+                )
+            }
         }
     }
 
