@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lrhsoft.shifterclone.model.Shift
@@ -41,83 +43,87 @@ fun CalendarDayCell(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(0.dp)
 
     val borderWidth = when {
-        isRangeEndpoint -> 3.dp
-        isInRange -> 2.dp
+        isRangeEndpoint -> 2.5.dp
+        isInRange -> 1.5.dp
         isToday -> 2.dp
-        else -> 0.dp
+        else -> 0.5.dp
     }
     val borderColor = when {
         isRangeEndpoint -> Color(0xFFD32F2F)
-        isInRange -> Color(0xFFD32F2F).copy(alpha = 0.7f)
-        isToday -> MaterialTheme.colorScheme.primary
-        else -> Color.Transparent
+        isInRange -> Color(0xFFD32F2F).copy(alpha = 0.65f)
+        isToday -> Color(0xFFD32F2F)
+        else -> Color(0xFFBDBDBD)
     }
 
     Box(
         modifier = modifier
-            .padding(2.dp)
-            .clip(shape)
+            .border(width = borderWidth, color = borderColor, shape = shape)
             .background(
                 when {
-                    !isCurrentMonth -> Color.Transparent
-                    isInRange && shifts.isEmpty() -> Color(0xFFD32F2F).copy(alpha = 0.15f)
+                    !isCurrentMonth -> Color(0xFFF5F5F5)
+                    isInRange && shifts.isEmpty() -> Color(0xFFD32F2F).copy(alpha = 0.12f)
                     shifts.isNotEmpty() -> shifts.first().toComposeColor()
-                    else -> MaterialTheme.colorScheme.surface
+                    else -> Color.White
                 }
             )
-            .border(width = borderWidth, color = borderColor, shape = shape)
             .combinedClickable(
                 enabled = dayNumber != null && isCurrentMonth,
                 onClick = onClick,
                 onLongClick = onLongClick
             )
             .fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopStart
     ) {
         if (dayNumber != null) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(2.dp)
+                    .padding(horizontal = 3.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = dayNumber.toString(),
-                    fontSize = 12.sp,
-                    fontWeight = if (isToday || isRangeEndpoint) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 13.sp,
+                    fontWeight = if (isToday || isRangeEndpoint) FontWeight.Bold else FontWeight.Medium,
                     color = when {
-                        !isCurrentMonth -> Color.Gray.copy(alpha = 0.4f)
+                        !isCurrentMonth -> Color.Gray.copy(alpha = 0.35f)
+                        isToday && shifts.isEmpty() -> Color(0xFFD32F2F)
                         shifts.isNotEmpty() -> shifts.first().toTextComposeColor()
-                        else -> MaterialTheme.colorScheme.onSurface
+                        else -> Color(0xFF212121)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Start
                 )
 
                 if (shifts.isNotEmpty() && isCurrentMonth) {
-                    shifts.take(2).forEach { shift ->
+                    shifts.take(3).forEach { shift ->
                         Text(
                             text = shift.abbreviation,
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = shift.toTextComposeColor(),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
 
                 if (isCurrentMonth && (hasNote || hasAlarm)) {
                     Row(
-                        modifier = Modifier.padding(top = 1.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 1.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (hasNote) {
                             Box(
                                 modifier = Modifier
-                                    .size(5.dp)
+                                    .size(6.dp)
                                     .clip(CircleShape)
                                     .background(
                                         if (shifts.isNotEmpty()) shifts.first().toTextComposeColor()
@@ -128,7 +134,8 @@ fun CalendarDayCell(
                         if (hasAlarm) {
                             Box(
                                 modifier = Modifier
-                                    .size(5.dp)
+                                    .padding(start = 3.dp)
+                                    .size(6.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xFFFFC107))
                             )
