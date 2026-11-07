@@ -57,11 +57,13 @@ data class CalendarUiState(
     val assignments: Map<String, DayAssignment> = emptyMap(),
     val notes: Map<String, DayNote> = emptyMap(),
     val selectedShiftId: String? = null,
+    val isEraserSelected: Boolean = false,
     val editMode: EditMode = EditMode.PAINT,
     val rangeStart: LocalDate? = null,
     val rangeEnd: LocalDate? = null,
     val showShiftEditor: Boolean = false,
     val editingShift: Shift? = null,
+    val showShiftsManager: Boolean = false,
     val detailDate: LocalDate? = null,
     val showStats: Boolean = false,
     val statsPeriod: StatsPeriod = StatsPeriod.MONTH,
@@ -96,11 +98,13 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     private val _currentMonth = MutableStateFlow(YearMonth.now())
     private val _selectedShiftId = MutableStateFlow<String?>(null)
+    private val _isEraserSelected = MutableStateFlow(false)
     private val _editMode = MutableStateFlow(EditMode.PAINT)
     private val _rangeStart = MutableStateFlow<LocalDate?>(null)
     private val _rangeEnd = MutableStateFlow<LocalDate?>(null)
     private val _showShiftEditor = MutableStateFlow(false)
     private val _editingShift = MutableStateFlow<Shift?>(null)
+    private val _showShiftsManager = MutableStateFlow(false)
     private val _detailDate = MutableStateFlow<LocalDate?>(null)
     private val _showStats = MutableStateFlow(false)
     private val _statsPeriod = MutableStateFlow(StatsPeriod.MONTH)
@@ -115,9 +119,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     private data class ModeState(
         val selectedShiftId: String?,
+        val isEraserSelected: Boolean,
         val editMode: EditMode,
         val rangeStart: LocalDate?,
-        val rangeEnd: LocalDate?
+        val rangeEnd: LocalDate?,
+        val showShiftsManager: Boolean
     )
 
     private data class CoreState(
@@ -131,8 +137,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         combine(_currentMonth, repo.shiftsFlow, repo.assignmentsFlow, repo.notesFlow) { month, shifts, assignments, notes ->
             CoreState(month, shifts, assignments, notes)
         },
-        combine(_selectedShiftId, _editMode, _rangeStart, _rangeEnd) { selectedId, mode, rStart, rEnd ->
-            ModeState(selectedId, mode, rStart, rEnd)
+        combine(
+            combine(_selectedShiftId, _isEraserSelected, _editMode) { a, b, c -> Triple(a, b, c) },
+            combine(_rangeStart, _rangeEnd, _showShiftsManager) { a, b, c -> Triple(a, b, c) }
+        ) { t1, t2 ->
+            ModeState(t1.first, t1.second, t1.third, t2.first, t2.second, t2.third)
         },
         combine(
             combine(_showShiftEditor, _editingShift, _detailDate) { show, editing, detail ->
@@ -166,11 +175,13 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             assignments = core.assignments,
             notes = core.notes,
             selectedShiftId = modeState.selectedShiftId ?: core.shifts.firstOrNull()?.id,
+            isEraserSelected = modeState.isEraserSelected,
             editMode = modeState.editMode,
             rangeStart = modeState.rangeStart,
             rangeEnd = modeState.rangeEnd,
             showShiftEditor = showEditor,
             editingShift = editing,
+            showShiftsManager = modeState.showShiftsManager,
             detailDate = detail,
             showStats = showStats,
             statsPeriod = period,
@@ -193,11 +204,27 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     fun nextMonth() { _currentMonth.value = _currentMonth.value.plusMonths(1) }
     fun goToToday() { _currentMonth.value = YearMonth.now() }
 
-    fun selectShift(shiftId: String) { _selectedShiftId.value = shiftId }
+    fun selectShift(shiftId: String) {
+        _selectedShiftId.value = shiftId
+        _isEraserSelected.value = false
+    }
+
+    fun selectEraser() {
+        _isEraserSelected.value = true
+        _selectedShiftId.value = null
+    }
 
     fun setEditMode(mode: EditMode) {
         _editMode.value = mode
         if (mode == EditMode.PAINT) clearRange()
+    }
+
+    fun openShiftsManager() {
+        _showShiftsManager.value = true
+    }
+
+    fun dismissShiftsManager() {
+        _showShiftsManager.value = false
     }
 
     fun onDayClicked(year: Int, month: Int, day: Int) {
@@ -217,6 +244,13 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun paintDay(date: LocalDate) {
+        if (_isEraserSelected.value) {
+            viewModelScope.launch {
+                repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null)
+                refreshWidgets()
+            }
+            return
+        }
         val selectedId = _selectedShiftId.value ?: return
         val state = uiState.value
         viewModelScope.launch {
@@ -394,6 +428,19 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 _selectedShiftId.value = current.firstOrNull()?.id
             }
             dismissShiftEditor()
+        }
+    }
+
+    fun duplicateShift(shift: Shift) {
+        val copy = shift.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            name = "${shift.name} (copia)"
+        )
+        viewModelScope.launch {
+            val current = uiState.value.shifts.toMutableList()
+            current.add(copy)
+            repo.saveShifts(current)
+            refreshWidgets()
         }
     }
 
