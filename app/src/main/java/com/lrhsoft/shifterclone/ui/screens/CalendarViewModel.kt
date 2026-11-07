@@ -27,6 +27,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 enum class EditMode {
+    VIEW,
     PAINT,
     EDIT
 }
@@ -58,7 +59,7 @@ data class CalendarUiState(
     val notes: Map<String, DayNote> = emptyMap(),
     val selectedShiftId: String? = null,
     val isEraserSelected: Boolean = false,
-    val editMode: EditMode = EditMode.PAINT,
+    val editMode: EditMode = EditMode.VIEW,
     val rangeStart: LocalDate? = null,
     val rangeEnd: LocalDate? = null,
     val showShiftEditor: Boolean = false,
@@ -99,7 +100,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _currentMonth = MutableStateFlow(YearMonth.now())
     private val _selectedShiftId = MutableStateFlow<String?>(null)
     private val _isEraserSelected = MutableStateFlow(false)
-    private val _editMode = MutableStateFlow(EditMode.PAINT)
+    private val _editMode = MutableStateFlow(EditMode.VIEW)
     private val _rangeStart = MutableStateFlow<LocalDate?>(null)
     private val _rangeEnd = MutableStateFlow<LocalDate?>(null)
     private val _showShiftEditor = MutableStateFlow(false)
@@ -216,7 +217,27 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     fun setEditMode(mode: EditMode) {
         _editMode.value = mode
-        if (mode == EditMode.PAINT) clearRange()
+        if (mode != EditMode.EDIT) clearRange()
+    }
+
+    /** PINTAR: activa o desactiva la barra de turnos */
+    fun togglePaintMode() {
+        if (_editMode.value == EditMode.PAINT) {
+            _editMode.value = EditMode.VIEW
+        } else {
+            _editMode.value = EditMode.PAINT
+            clearRange()
+        }
+    }
+
+    /** EDITAR: activa o desactiva el modo rango */
+    fun toggleEditMode() {
+        if (_editMode.value == EditMode.EDIT) {
+            _editMode.value = EditMode.VIEW
+            clearRange()
+        } else {
+            _editMode.value = EditMode.EDIT
+        }
     }
 
     fun openShiftsManager() {
@@ -232,6 +253,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         when (_editMode.value) {
             EditMode.PAINT -> paintDay(date)
             EditMode.EDIT -> selectRangeDay(date)
+            EditMode.VIEW -> _detailDate.value = date
         }
     }
 
