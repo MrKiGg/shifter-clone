@@ -5,13 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,10 +51,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -145,6 +145,28 @@ fun CalendarScreen(
         }
     ) { padding ->
         var dragAccum by remember { mutableFloatStateOf(0f) }
+        var displayedMonth by remember { mutableStateOf(state.currentMonth) }
+        val rotationY = remember { Animatable(0f) }
+        val density = LocalDensity.current.density
+
+        // Volteo 3D al cambiar de mes (deslizamiento o flechas)
+        LaunchedEffect(state.currentMonth) {
+            if (state.currentMonth == displayedMonth) return@LaunchedEffect
+            val forward = state.currentMonth > displayedMonth
+            // Sale girando
+            rotationY.animateTo(
+                targetValue = if (forward) -90f else 90f,
+                animationSpec = tween(180)
+            )
+            displayedMonth = state.currentMonth
+            // Entra desde el otro lado
+            rotationY.snapTo(if (forward) 90f else -90f)
+            rotationY.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(220)
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -167,43 +189,33 @@ fun CalendarScreen(
                 }
         ) {
             MonthHeader(
-                yearMonth = state.currentMonth,
+                yearMonth = displayedMonth,
                 onPrevious = { viewModel.previousMonth() },
                 onNext = { viewModel.nextMonth() }
             )
 
-            AnimatedContent(
-                targetState = state.currentMonth,
-                transitionSpec = {
-                    val forward = targetState > initialState
-                    if (forward) {
-                        (slideInHorizontally(
-                            animationSpec = tween(280),
-                            initialOffsetX = { it }
-                        ) + fadeIn(animationSpec = tween(220))) togetherWith
-                            (slideOutHorizontally(
-                                animationSpec = tween(280),
-                                targetOffsetX = { -it / 3 }
-                            ) + fadeOut(animationSpec = tween(180)))
-                    } else {
-                        (slideInHorizontally(
-                            animationSpec = tween(280),
-                            initialOffsetX = { -it }
-                        ) + fadeIn(animationSpec = tween(220))) togetherWith
-                            (slideOutHorizontally(
-                                animationSpec = tween(280),
-                                targetOffsetX = { it / 3 }
-                            ) + fadeOut(animationSpec = tween(180)))
-                    }
-                },
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                label = "monthTransition"
-            ) { month ->
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                    .graphicsLayer {
+                        this.rotationY = rotationY.value
+                        cameraDistance = 18f * density
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        // Ligera sombra de profundidad al girar
+                        val absRot = kotlin.math.abs(rotationY.value)
+                        alpha = 1f - (absRot / 90f) * 0.15f
+                        scaleX = 1f - (absRot / 90f) * 0.04f
+                        scaleY = 1f - (absRot / 90f) * 0.04f
+                    }
+                    // Contorno exterior fuerte del bloque del mes
+                    .border(2.dp, Color.Black)
+                    .background(Color.White)
+            ) {
                 MonthGrid(
                     modifier = Modifier.fillMaxSize(),
-                    yearMonth = month,
+                    yearMonth = displayedMonth,
                     assignments = state.assignments,
                     shifts = state.shifts,
                     notes = state.notes,
@@ -294,7 +306,6 @@ private fun MonthHeader(
     onPrevious: () -> Unit,
     onNext: () -> Unit
 ) {
-    val isCurrent = yearMonth == YearMonth.now()
     val monthName = yearMonth.month
         .getDisplayName(TextStyle.FULL, Locale("es", "ES"))
         .replaceFirstChar { it.uppercase() }
@@ -315,9 +326,9 @@ private fun MonthHeader(
         }
         Text(
             text = "$monthName ${yearMonth.year}".uppercase(Locale("es", "ES")),
-            fontSize = if (isCurrent) 20.sp else 18.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isCurrent) Color(0xFFD32F2F) else Color(0xFF212121)
+            color = Color(0xFF212121)
         )
         IconButton(onClick = onNext) {
             Icon(
@@ -545,7 +556,7 @@ private fun MonthGrid(
     val weekDays = listOf("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
     val weeks = cells.chunked(7)
 
-    Column(modifier = modifier.padding(horizontal = 4.dp)) {
+    Column(modifier = modifier.padding(horizontal = 0.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
