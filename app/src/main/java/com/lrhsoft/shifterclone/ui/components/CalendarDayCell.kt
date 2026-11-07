@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +37,7 @@ fun CalendarDayCell(
     isRangeEndpoint: Boolean = false,
     hasNote: Boolean = false,
     hasAlarm: Boolean = false,
+    noteText: String? = null,
     shifts: List<Shift>,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -56,6 +56,13 @@ fun CalendarDayCell(
         isInRange -> Color(0xFFD32F2F).copy(alpha = 0.65f)
         isToday -> Color(0xFFD32F2F)
         else -> Color(0xFFBDBDBD)
+    }
+
+    val contentColor = when {
+        !isCurrentMonth -> Color.Gray.copy(alpha = 0.35f)
+        isToday && shifts.isEmpty() -> Color(0xFFD32F2F)
+        shifts.isNotEmpty() -> shifts.first().toTextComposeColor()
+        else -> Color(0xFF212121)
     }
 
     Box(
@@ -83,25 +90,33 @@ fun CalendarDayCell(
                     .fillMaxSize()
                     .padding(horizontal = 3.dp, vertical = 2.dp)
             ) {
-                Text(
-                    text = dayNumber.toString(),
-                    fontSize = 13.sp,
-                    fontWeight = if (isToday || isRangeEndpoint) FontWeight.Bold else FontWeight.Medium,
-                    color = when {
-                        !isCurrentMonth -> Color.Gray.copy(alpha = 0.35f)
-                        isToday && shifts.isEmpty() -> Color(0xFFD32F2F)
-                        shifts.isNotEmpty() -> shifts.first().toTextComposeColor()
-                        else -> Color(0xFF212121)
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start
-                )
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = dayNumber.toString(),
+                        fontSize = 13.sp,
+                        fontWeight = if (isToday || isRangeEndpoint) FontWeight.Bold else FontWeight.Medium,
+                        color = contentColor,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Start
+                    )
+                    if (isCurrentMonth && hasAlarm) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFFC107))
+                        )
+                    }
+                }
 
                 if (shifts.isNotEmpty() && isCurrentMonth) {
-                    shifts.take(3).forEach { shift ->
+                    shifts.take(2).forEach { shift ->
                         Text(
                             text = shift.abbreviation,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = shift.toTextComposeColor(),
                             maxLines = 1,
@@ -112,35 +127,31 @@ fun CalendarDayCell(
                     }
                 }
 
-                if (isCurrentMonth && (hasNote || hasAlarm)) {
-                    Row(
+                if (isCurrentMonth && !noteText.isNullOrBlank()) {
+                    Text(
+                        text = noteText,
+                        fontSize = 9.sp,
+                        color = contentColor.copy(alpha = 0.9f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 10.sp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 1.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (hasNote) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (shifts.isNotEmpty()) shifts.first().toTextComposeColor()
-                                        else MaterialTheme.colorScheme.primary
-                                    )
+                        textAlign = TextAlign.Start
+                    )
+                } else if (isCurrentMonth && hasNote) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (shifts.isNotEmpty()) shifts.first().toTextComposeColor()
+                                else MaterialTheme.colorScheme.primary
                             )
-                        }
-                        if (hasAlarm) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(start = 3.dp)
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFFC107))
-                            )
-                        }
-                    }
+                            .align(Alignment.CenterHorizontally)
+                    )
                 }
             }
         }
