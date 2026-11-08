@@ -514,21 +514,21 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     fun applyPendingPattern(mode: String, count: Int, untilDate: LocalDate?) {
         val pattern = _pendingPattern.value
-        val start = _patternStartDate.value
-        if (pattern.isEmpty() || start == null) return
+        if (pattern.isEmpty()) return
+        val startDate: LocalDate = _patternStartDate.value ?: return
 
         val endDate: LocalDate = when (mode) {
-            "END_OF_MONTH" -> YearMonth.from(start).atEndOfMonth()
-            "CYCLES" -> start.plusDays((pattern.size * count.coerceAtLeast(1)).toLong() - 1)
-            "MONTHS" -> start.plusMonths(count.coerceAtLeast(1).toLong()).minusDays(1)
+            "END_OF_MONTH" -> YearMonth.from(startDate).atEndOfMonth()
+            "CYCLES" -> startDate.plusDays((pattern.size * count.coerceAtLeast(1)).toLong() - 1)
+            "MONTHS" -> startDate.plusMonths(count.coerceAtLeast(1).toLong()).minusDays(1)
             "UNTIL_DATE" -> untilDate ?: return
-            else -> YearMonth.from(start).atEndOfMonth()
+            else -> YearMonth.from(startDate).atEndOfMonth()
         }
-        if (endDate.isBefore(start)) return
+        if (endDate.isBefore(startDate)) return
 
         viewModelScope.launch {
             val updates = mutableMapOf<Triple<Int, Int, Int>, List<String>>()
-            var cursor = start
+            var cursor = startDate
             var index = 0
             while (!cursor.isAfter(endDate)) {
                 val shiftId = pattern[index % pattern.size]
