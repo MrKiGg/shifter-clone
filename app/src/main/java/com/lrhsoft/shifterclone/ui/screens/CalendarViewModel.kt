@@ -1,22 +1,21 @@
 package com.lrhsoft.shifterclone.ui.screens
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lrhsoft.shifterclone.alarm.AlarmScheduler
-import com.lrhsoft.shifterclone.widget.WidgetUpdater
-import com.lrhsoft.shifterclone.export.CalendarExporter
-import com.lrhsoft.shifterclone.export.DeviceCalendar
-import com.lrhsoft.shifterclone.ui.components.ExportRange
-import android.content.Intent
-
 import com.lrhsoft.shifterclone.data.ShiftRepository
 import com.lrhsoft.shifterclone.data.StatsCalculator
-import com.lrhsoft.shifterclone.model.StatsSummary
-import com.lrhsoft.shifterclone.ui.components.StatsPeriod
+import com.lrhsoft.shifterclone.export.CalendarExporter
+import com.lrhsoft.shifterclone.export.DeviceCalendar
 import com.lrhsoft.shifterclone.model.DayAssignment
 import com.lrhsoft.shifterclone.model.DayNote
 import com.lrhsoft.shifterclone.model.Shift
+import com.lrhsoft.shifterclone.model.StatsSummary
+import com.lrhsoft.shifterclone.ui.components.ExportRange
+import com.lrhsoft.shifterclone.ui.components.StatsPeriod
+import com.lrhsoft.shifterclone.widget.WidgetUpdater
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +82,12 @@ data class CalendarUiState(
     val exportLoading: Boolean = false,
     val exportMessage: String? = null,
     val topTab: TopTab = TopTab.MONTH,
-    val yearViewYear: Int = java.time.Year.now().value
+    val yearViewYear: Int = java.time.Year.now().value,
+    val showPatternBuilder: Boolean = false,
+    val patternAwaitingStart: Boolean = false,
+    val pendingPattern: List<String?> = emptyList(),
+    val patternStartDate: LocalDate? = null,
+    val showApplyPattern: Boolean = false
 ) {
     val selectedRange: DateRange?
         get() {
@@ -127,6 +131,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _exportMessage = MutableStateFlow<String?>(null)
     private val _topTab = MutableStateFlow(TopTab.MONTH)
     private val _yearViewYear = MutableStateFlow(java.time.Year.now().value)
+    private val _showPatternBuilder = MutableStateFlow(false)
+    private val _patternAwaitingStart = MutableStateFlow(false)
+    private val _pendingPattern = MutableStateFlow<List<String?>>(emptyList())
+    private val _patternStartDate = MutableStateFlow<LocalDate?>(null)
+    private val _showApplyPattern = MutableStateFlow(false)
 
     private data class ModeState(
         val selectedShiftId: String?,
@@ -170,8 +179,18 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         ) { editor, stats, exportPack ->
             Triple(editor, stats, exportPack)
         },
-        combine(_topTab, _yearViewYear) { tab, year -> tab to year }
-    ) { core, modeState, pack, tabYear ->
+        combine(
+            combine(_topTab, _yearViewYear) { tab, year -> tab to year },
+            combine(
+                combine(_showPatternBuilder, _patternAwaitingStart, _pendingPattern) { a, b, c -> Triple(a, b, c) },
+                combine(_patternStartDate, _showApplyPattern) { d, e -> d to e }
+            ) { t, p -> t to p }
+        ) { tabYear, patternPack -> tabYear to patternPack }
+    ) { core, modeState, pack, tabPattern ->
+        val tabYear = tabPattern.first
+        val patternPack = tabPattern.second
+        val (showBuilder, awaitingStart, pending) = patternPack.first
+        val (patternStart, showApply) = patternPack.second
         val (editor, stats, exportPack) = pack
         val (showEditor, editing, detail) = editor
         val (showStats, period, statsYm) = stats
@@ -206,7 +225,12 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             exportLoading = exportLoading,
             exportMessage = exportMessage,
             topTab = tabYear.first,
-            yearViewYear = tabYear.second
+            yearViewYear = tabYear.second,
+            showPatternBuilder = showBuilder,
+            patternAwaitingStart = awaitingStart,
+            pendingPattern = pending,
+            patternStartDate = patternStart,
+            showApplyPattern = showApply
         )
     }.stateIn(
         scope = viewModelScope,
@@ -226,9 +250,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setYearViewYear(year: Int) { _yearViewYear.value = year }
-
     fun previousYearView() { _yearViewYear.value = _yearViewYear.value - 1 }
-
     fun nextYearView() { _yearViewYear.value = _yearViewYear.value + 1 }
 
     fun openMonthFromYear(year: Int, month: Int) {
@@ -269,16 +291,17 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openShiftsManager() {
-        _showShiftsManager.value = true
-    }
-
-    fun dismissShiftsManager() {
-        _showShiftsManager.value = false
-    }
+    fun openShiftsManager() { _showShiftsManager.value = true }
+    fun dismissShiftsManager() { _showShiftsManager.value = false }
 
     fun onDayClicked(year: Int, month: Int, day: Int) {
         val date = LocalDate.of(year, month, day)
+        if (_patternAwaitingStart.value) {
+            _patternStartDate.value = date
+            _patternAwaitingStart.value = false
+            _showApplyPattern.value = true
+            return
+        }
         when (_editMode.value) {
             EditMode.PAINT -> paintDay(date)
             EditMode.EDIT -> selectRangeDay(date)
@@ -290,9 +313,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         _detailDate.value = LocalDate.of(year, month, day)
     }
 
-    fun dismissDayDetail() {
-        _detailDate.value = null
-    }
+    fun dismissDayDetail() { _detailDate.value = null }
 
     private fun paintDay(date: LocalDate) {
         if (_isEraserSelected.value) {
@@ -309,11 +330,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             val current = state.assignments[key]
             if (current != null && current.shiftIds.size == 1 && current.shiftIds[0] == selectedId) {
                 repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null)
-                refreshWidgets()
             } else {
                 repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, selectedId, replace = true)
-                refreshWidgets()
             }
+            refreshWidgets()
         }
     }
 
@@ -366,7 +386,6 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         val state = uiState.value
         val patternDays = range.days()
         if (patternDays.isEmpty()) return
-
         val pattern: List<List<String>> = patternDays.map { d ->
             val key = DayAssignment.key(d.year, d.monthValue, d.dayOfMonth)
             state.assignments[key]?.shiftIds ?: emptyList()
@@ -379,35 +398,6 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             startAfter.plusDays((patternLen * cycles).toLong() - 1)
         }
         if (startAfter.isAfter(endDate)) return
-
-        viewModelScope.launch {
-            val updates = mutableMapOf<Triple<Int, Int, Int>, List<String>>()
-            var cursor = startAfter
-            var index = 0
-            while (!cursor.isAfter(endDate)) {
-                updates[Triple(cursor.year, cursor.monthValue, cursor.dayOfMonth)] = pattern[index % patternLen]
-                cursor = cursor.plusDays(1)
-                index++
-            }
-            if (updates.isNotEmpty()) repo.applyBulk(updates)
-            refreshWidgets()
-        }
-    }
-
-    fun repeatPatternMonths(months: Int = 1) {
-        val range = uiState.value.selectedRange ?: return
-        val state = uiState.value
-        val patternDays = range.days()
-        if (patternDays.isEmpty()) return
-
-        val pattern: List<List<String>> = patternDays.map { d ->
-            val key = DayAssignment.key(d.year, d.monthValue, d.dayOfMonth)
-            state.assignments[key]?.shiftIds ?: emptyList()
-        }
-        val patternLen = pattern.size
-        val startAfter = range.end.plusDays(1)
-        val endDate = range.end.plusMonths(months.toLong())
-
         viewModelScope.launch {
             val updates = mutableMapOf<Triple<Int, Int, Int>, List<String>>()
             var cursor = startAfter
@@ -425,19 +415,14 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     fun saveNote(note: DayNote) {
         viewModelScope.launch {
             repo.saveNote(note)
-            if (note.hasAlarm) {
-                alarmScheduler.schedule(note)
-            } else {
-                alarmScheduler.cancel(note)
-            }
+            if (note.hasAlarm) alarmScheduler.schedule(note) else alarmScheduler.cancel(note)
             dismissDayDetail()
         }
     }
 
     fun deleteNote(year: Int, month: Int, day: Int) {
         viewModelScope.launch {
-            val key = DayNote.key(year, month, day)
-            alarmScheduler.cancel(key)
+            alarmScheduler.cancel(DayNote.key(year, month, day))
             repo.deleteNote(year, month, day)
             dismissDayDetail()
         }
@@ -495,35 +480,89 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun openPatternBuilder() {
+        _editMode.value = EditMode.VIEW
+        clearRange()
+        _topTab.value = TopTab.MONTH
+        _showPatternBuilder.value = true
+    }
+
+    fun dismissPatternBuilder() {
+        _showPatternBuilder.value = false
+    }
+
+    fun confirmPatternSequence(sequence: List<String?>) {
+        if (sequence.isEmpty()) return
+        _pendingPattern.value = sequence
+        _showPatternBuilder.value = false
+        _patternAwaitingStart.value = true
+        _topTab.value = TopTab.MONTH
+    }
+
+    fun cancelPatternAwaiting() {
+        _patternAwaitingStart.value = false
+        _pendingPattern.value = emptyList()
+        _patternStartDate.value = null
+        _showApplyPattern.value = false
+    }
+
+    fun dismissApplyPattern() {
+        _showApplyPattern.value = false
+        _pendingPattern.value = emptyList()
+        _patternStartDate.value = null
+    }
+
+    fun applyPendingPattern(mode: String, count: Int, untilDate: LocalDate?) {
+        val pattern = _pendingPattern.value
+        val start = _patternStartDate.value
+        if (pattern.isEmpty() || start == null) return
+
+        val endDate: LocalDate = when (mode) {
+            "END_OF_MONTH" -> YearMonth.from(start).atEndOfMonth()
+            "CYCLES" -> start.plusDays((pattern.size * count.coerceAtLeast(1)).toLong() - 1)
+            "MONTHS" -> start.plusMonths(count.coerceAtLeast(1).toLong()).minusDays(1)
+            "UNTIL_DATE" -> untilDate ?: return
+            else -> YearMonth.from(start).atEndOfMonth()
+        }
+        if (endDate.isBefore(start)) return
+
+        viewModelScope.launch {
+            val updates = mutableMapOf<Triple<Int, Int, Int>, List<String>>()
+            var cursor = start
+            var index = 0
+            while (!cursor.isAfter(endDate)) {
+                val shiftId = pattern[index % pattern.size]
+                updates[Triple(cursor.year, cursor.monthValue, cursor.dayOfMonth)] =
+                    if (shiftId == null) emptyList() else listOf(shiftId)
+                cursor = cursor.plusDays(1)
+                index++
+            }
+            if (updates.isNotEmpty()) repo.applyBulk(updates)
+            refreshWidgets()
+        }
+        _showApplyPattern.value = false
+        _pendingPattern.value = emptyList()
+        _patternStartDate.value = null
+        _patternAwaitingStart.value = false
+    }
+
     fun openStats() {
         _statsYearMonth.value = _currentMonth.value
         _showStats.value = true
     }
 
-    fun dismissStats() {
-        _showStats.value = false
-    }
+    fun dismissStats() { _showStats.value = false }
 
-    fun setStatsPeriod(period: StatsPeriod) {
-        _statsPeriod.value = period
-    }
+    fun setStatsPeriod(period: StatsPeriod) { _statsPeriod.value = period }
 
     fun statsPrevious() {
         val ym = _statsYearMonth.value
-        _statsYearMonth.value = if (_statsPeriod.value == StatsPeriod.MONTH) {
-            ym.minusMonths(1)
-        } else {
-            ym.minusYears(1)
-        }
+        _statsYearMonth.value = if (_statsPeriod.value == StatsPeriod.MONTH) ym.minusMonths(1) else ym.minusYears(1)
     }
 
     fun statsNext() {
         val ym = _statsYearMonth.value
-        _statsYearMonth.value = if (_statsPeriod.value == StatsPeriod.MONTH) {
-            ym.plusMonths(1)
-        } else {
-            ym.plusYears(1)
-        }
+        _statsYearMonth.value = if (_statsPeriod.value == StatsPeriod.MONTH) ym.plusMonths(1) else ym.plusYears(1)
     }
 
     fun computeStats(state: CalendarUiState = uiState.value): StatsSummary {
@@ -559,23 +598,15 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun selectExportCalendar(id: Long) {
-        _selectedCalendarId.value = id
-    }
+    fun selectExportCalendar(id: Long) { _selectedCalendarId.value = id }
+    fun setExportRange(range: ExportRange) { _exportRange.value = range }
+    fun setExportIncludeRest(include: Boolean) { _exportIncludeRest.value = include }
 
-    fun setExportRange(range: ExportRange) {
-        _exportRange.value = range
-    }
-
-    fun setExportIncludeRest(include: Boolean) {
-        _exportIncludeRest.value = include
-    }
-
-    private fun exportBounds(): Pair<java.time.LocalDate, java.time.LocalDate> {
+    private fun exportBounds(): Pair<LocalDate, LocalDate> {
         val ym = uiState.value.currentMonth
         return when (_exportRange.value) {
             ExportRange.CURRENT_MONTH -> ym.atDay(1) to ym.atEndOfMonth()
-            ExportRange.CURRENT_YEAR -> java.time.LocalDate.of(ym.year, 1, 1) to java.time.LocalDate.of(ym.year, 12, 31)
+            ExportRange.CURRENT_YEAR -> LocalDate.of(ym.year, 1, 1) to LocalDate.of(ym.year, 12, 31)
         }
     }
 
@@ -587,8 +618,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             _exportMessage.value = null
             try {
                 val (from, to) = exportBounds()
-                val exporter = CalendarExporter(getApplication())
-                val result = exporter.exportToCalendar(
+                val result = CalendarExporter(getApplication()).exportToCalendar(
                     calendarId = calId,
                     from = from,
                     to = to,
@@ -621,5 +651,4 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             null
         }
     }
-
 }
