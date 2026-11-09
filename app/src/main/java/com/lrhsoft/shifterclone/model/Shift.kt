@@ -40,6 +40,7 @@ data class Shift(
     companion object {
         val DEFAULT_SHIFTS = listOf(
             Shift(
+                id = "default-manana",
                 name = "Mañana",
                 abbreviation = "M",
                 color = 0xFF4CAF50,
@@ -48,6 +49,7 @@ data class Shift(
                 hourlyRate = 12.0
             ),
             Shift(
+                id = "default-tarde",
                 name = "Tarde",
                 abbreviation = "T",
                 color = 0xFFFF9800,
@@ -56,6 +58,7 @@ data class Shift(
                 hourlyRate = 12.0
             ),
             Shift(
+                id = "default-noche",
                 name = "Noche",
                 abbreviation = "N",
                 color = 0xFF3F51B5,
@@ -65,12 +68,14 @@ data class Shift(
                 hourlyRate = 14.0
             ),
             Shift(
+                id = "default-libre",
                 name = "Libre",
                 abbreviation = "L",
                 color = 0xFF9E9E9E,
                 isRest = true
             ),
             Shift(
+                id = "default-vacaciones",
                 name = "Vacaciones",
                 abbreviation = "V",
                 color = 0xFF00BCD4,
