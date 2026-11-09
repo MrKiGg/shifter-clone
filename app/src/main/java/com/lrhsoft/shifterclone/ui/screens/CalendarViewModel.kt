@@ -105,6 +105,12 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val repo = ShiftRepository(application)
     private val alarmScheduler = AlarmScheduler(application)
 
+    init {
+        viewModelScope.launch {
+            repo.ensureDefaults()
+        }
+    }
+
     private fun refreshWidgets() {
         WidgetUpdater.refreshAll(getApplication())
     }
