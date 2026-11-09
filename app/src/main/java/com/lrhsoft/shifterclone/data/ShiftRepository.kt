@@ -25,7 +25,19 @@ class ShiftRepository(private val context: Context) {
     // ---------- Shifts ----------
     val shiftsFlow: Flow<List<Shift>> = context.dataStore.data.map { prefs ->
         val json = prefs[shiftsKey] ?: return@map Shift.DEFAULT_SHIFTS
-        parseShifts(json)
+        parseShifts(json).ifEmpty { Shift.DEFAULT_SHIFTS }
+    }
+
+    /**
+     * Guarda los turnos por defecto la primera vez para que los IDs no cambien
+     * entre sesiones (si no, los días pintados pierden la referencia al turno).
+     */
+    suspend fun ensureDefaults() {
+        context.dataStore.edit { prefs ->
+            if (prefs[shiftsKey].isNullOrBlank()) {
+                prefs[shiftsKey] = shiftsToJson(Shift.DEFAULT_SHIFTS)
+            }
+        }
     }
 
     suspend fun saveShifts(shifts: List<Shift>) {
@@ -122,7 +134,7 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    // ---------- JSON helpers (simple, sin librerías extra) ----------
+    // ---------- JSON helpers ----------
     private fun shiftsToJson(shifts: List<Shift>): String {
         val arr = JSONArray()
         shifts.forEach { s ->
@@ -146,24 +158,28 @@ class ShiftRepository(private val context: Context) {
     private fun parseShifts(json: String): List<Shift> {
         return try {
             val arr = JSONArray(json)
-            (0 until arr.length()).map { i ->
+            val list = mutableListOf<Shift>()
+            for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                Shift(
-                    id = o.getString("id"),
-                    name = o.getString("name"),
-                    abbreviation = o.getString("abbreviation"),
-                    color = o.getLong("color"),
-                    textColor = o.optLong("textColor", 0xFFFFFFFF),
-                    startHour = if (o.isNull("startHour")) null else o.getInt("startHour"),
-                    startMinute = if (o.isNull("startMinute")) null else o.getInt("startMinute"),
-                    endHour = if (o.isNull("endHour")) null else o.getInt("endHour"),
-                    endMinute = if (o.isNull("endMinute")) null else o.getInt("endMinute"),
-                    isRest = o.optBoolean("isRest", false),
-                    hourlyRate = if (o.isNull("hourlyRate")) null else o.getDouble("hourlyRate")
+                list.add(
+                    Shift(
+                        id = o.getString("id"),
+                        name = o.getString("name"),
+                        abbreviation = o.getString("abbreviation"),
+                        color = o.getLong("color"),
+                        textColor = o.optLong("textColor", 0xFFFFFFFF),
+                        startHour = if (o.isNull("startHour")) null else o.getInt("startHour"),
+                        startMinute = if (o.isNull("startMinute")) null else o.getInt("startMinute"),
+                        endHour = if (o.isNull("endHour")) null else o.getInt("endHour"),
+                        endMinute = if (o.isNull("endMinute")) null else o.getInt("endMinute"),
+                        isRest = o.optBoolean("isRest", false),
+                        hourlyRate = if (o.isNull("hourlyRate")) null else o.getDouble("hourlyRate")
+                    )
                 )
             }
+            list
         } catch (e: Exception) {
-            Shift.DEFAULT_SHIFTS
+            emptyList()
         }
     }
 
