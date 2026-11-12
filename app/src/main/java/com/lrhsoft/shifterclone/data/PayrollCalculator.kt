@@ -23,43 +23,15 @@ object PayrollCalculator {
     ): PayrollEstimate {
         val rates = PayrollTables.rates(profile.group)
         val shiftMap = shifts.associateBy { it.id }
-
-        val fixed = mutableListOf<Pair<String, Double>>()
-        fixed += "Sueldo base" to rates.sueldoMes
-        fixed += "Complemento destino (nivel ${profile.destinoLevel})" to profile.destinoMensual
-        fixed += "Complemento especifico (${profile.category.label})" to profile.especificoMensual
-
-        if (profile.trienios > 0) {
-            fixed += "Antiguedad (${profile.trienios} trienios)" to rates.antiguedadMes * profile.trienios
-            fixed += "Diferencia antiguedad" to rates.diferenciaAntiguedadMes * profile.trienios
-        }
-
-        val hasTurnicidad = profile.hasTurnicidad || contracts.any { c ->
-            c.hasTurnicidad && run {
-                val end = yearMonth.atEndOfMonth()
-                var cur = yearMonth.atDay(1)
-                var hit = false
-                while (!cur.isAfter(end)) {
-                    if (c.contains(cur)) { hit = true; break }
-                    cur = cur.plusDays(1)
-                }
-                hit
-            }
-        }
-        if (hasTurnicidad) {
-            fixed += "Turnicidad" to rates.turnicidadMes
-        }
-
-        val fixedTotal = fixed.sumOf { it.second }
+        val daysInMonth = yearMonth.lengthOfMonth()
 
         var nights = 0
         var festivoDays = 0
         var festivoNights = 0
         var workDays = 0
+        val distinctWorkShiftIds = mutableSetOf<String>()
         var variable = 0.0
-        val variableLines = mutableListOf<Pair<String, Double>>()
 
-        val daysInMonth = yearMonth.lengthOfMonth()
         for (day in 1..daysInMonth) {
             val date = yearMonth.atDay(day)
             val key = DayAssignment.key(date.year, date.monthValue, date.dayOfMonth)
@@ -69,9 +41,9 @@ object PayrollCalculator {
                 .orEmpty()
             if (dayShifts.isEmpty()) continue
             workDays++
+            dayShifts.forEach { distinctWorkShiftIds.add(it.id) }
 
             val isFestivo = date.dayOfWeek == DayOfWeek.SUNDAY || holidays.contains(date)
-
             dayShifts.forEach { shift ->
                 val isNight = isNightShift(shift)
                 when {
@@ -85,11 +57,7 @@ object PayrollCalculator {
                     }
                     isNight -> {
                         nights++
-                        val amount = if (profile.countNightShiftAsFullNight) {
-                            rates.nocturnidadNoche
-                        } else {
-                            rates.nocturnidadHora * profile.horasNocheCompleta
-                        }
+                        val amount = rates.nocturnidadNoche
                         val mult = if (date.month == Month.DECEMBER &&
                             (date.dayOfMonth == 24 || date.dayOfMonth == 31)
                         ) 2.0 else 1.0
@@ -99,28 +67,59 @@ object PayrollCalculator {
             }
         }
 
+        val hasTurnicidad = distinctWorkShiftIds.size >= 2 ||
+            contracts.any { c -> c.hasTurnicidad && monthOverlapsContract(yearMonth, c) }
+
+        val fixedFull = mutableListOf<Pair<String, Double>>()
+        fixedFull += "Sueldo base" to rates.sueldoMes
+        fixedFull += "Complemento destino (nivel ${profile.destinoLevel})" to profile.destinoMensual
+        fixedFull += "Complemento especifico (${profile.category.label})" to profile.especificoMensual
+        if (profile.trienios > 0) {
+            fixedFull += "Antiguedad (${profile.trienios} trienios)" to rates.antiguedadMes * profile.trienios
+            fixedFull += "Diferencia antiguedad" to rates.diferenciaAntiguedadMes * profile.trienios
+        }
+        if (hasTurnicidad) {
+            fixedFull += "Turnicidad" to rates.turnicidadMes
+        }
+
+        val fullFixedTotal = fixedFull.sumOf { it.second }
+        val ratio = if (daysInMonth > 0) workDays.toDouble() / daysInMonth else 0.0
+        val proratedFixed = fullFixedTotal * ratio
+
+        val breakdown = mutableListOf<Pair<String, Double>>()
+        fixedFull.forEach { (label, amount) ->
+            breakdown += "$label (prorrateado)" to amount * ratio
+        }
         if (nights > 0) {
-            val unit = if (profile.countNightShiftAsFullNight) rates.nocturnidadNoche
-            else rates.nocturnidadHora * profile.horasNocheCompleta
-            variableLines += "Nocturnidad ($nights noches)" to unit * nights
+            breakdown += "Nocturnidad ($nights noches)" to rates.nocturnidadNoche * nights
         }
         if (festivoDays > 0) {
-            variableLines += "Festivo/domingo dia ($festivoDays)" to rates.festivoDia * festivoDays
+            breakdown += "Festivo/domingo dia ($festivoDays)" to rates.festivoDia * festivoDays
         }
         if (festivoNights > 0) {
-            variableLines += "Festivo/domingo noche ($festivoNights)" to rates.festivoNoche * festivoNights
+            breakdown += "Festivo/domingo noche ($festivoNights)" to rates.festivoNoche * festivoNights
         }
 
         return PayrollEstimate(
-            fixedMonthly = fixedTotal,
+            fixedMonthly = proratedFixed,
             variableFromShifts = variable,
-            totalEstimated = fixedTotal + variable,
-            breakdown = fixed + variableLines,
+            totalEstimated = proratedFixed + variable,
+            breakdown = breakdown,
             nights = nights,
             festivoDays = festivoDays,
             festivoNights = festivoNights,
             workDays = workDays
         )
+    }
+
+    private fun monthOverlapsContract(yearMonth: YearMonth, c: WorkContract): Boolean {
+        val end = yearMonth.atEndOfMonth()
+        var cur = yearMonth.atDay(1)
+        while (!cur.isAfter(end)) {
+            if (c.contains(cur)) return true
+            cur = cur.plusDays(1)
+        }
+        return false
     }
 
     private fun isNightShift(shift: Shift): Boolean {
