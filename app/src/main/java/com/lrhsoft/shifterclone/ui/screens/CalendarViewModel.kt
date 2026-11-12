@@ -122,6 +122,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _patternStartDate = MutableStateFlow<LocalDate?>(null)
     private val _showApplyPattern = MutableStateFlow(false)
     private val _showProfile = MutableStateFlow(false)
+    private val _showContracts = MutableStateFlow(false)
 
     private data class ModeState(
         val selectedShiftId: String?, val isEraserSelected: Boolean, val editMode: EditMode,
@@ -187,14 +188,25 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val userProfile: StateFlow<UserProfile> = repo.profileFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserProfile())
     val contracts: StateFlow<List<WorkContract>> = repo.contractsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val showProfile: StateFlow<Boolean> = _showProfile
+    val showContracts: StateFlow<Boolean> = _showContracts
 
     fun openProfile() { _showProfile.value = true }
     fun dismissProfile() { _showProfile.value = false }
+    fun openContracts() { _showContracts.value = true }
+    fun dismissContracts() { _showContracts.value = false }
     fun saveProfile(profile: UserProfile) { viewModelScope.launch { repo.saveProfile(profile) } }
     fun saveContracts(list: List<WorkContract>) { viewModelScope.launch { repo.saveContracts(list) } }
 
-    fun estimatePayroll(state: CalendarUiState = uiState.value): PayrollEstimate =
-        PayrollCalculator.estimateMonth(state.currentMonth, userProfile.value, state.assignments, state.shifts, contracts.value)
+    fun estimatePayroll(
+        yearMonth: YearMonth = uiState.value.currentMonth,
+        state: CalendarUiState = uiState.value
+    ): PayrollEstimate = PayrollCalculator.estimateMonth(
+        yearMonth = yearMonth,
+        profile = userProfile.value,
+        assignments = state.assignments,
+        shifts = state.shifts,
+        contracts = contracts.value
+    )
 
     fun previousMonth() { _currentMonth.value = _currentMonth.value.minusMonths(1) }
     fun nextMonth() { _currentMonth.value = _currentMonth.value.plusMonths(1) }
@@ -347,9 +359,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     }
     fun duplicateShift(shift: Shift) {
         val copy = shift.copy(id = java.util.UUID.randomUUID().toString(), name = "${shift.name} (copia)")
-        viewModelScope.launch {
-            repo.saveShifts(uiState.value.shifts + copy); refreshWidgets()
-        }
+        viewModelScope.launch { repo.saveShifts(uiState.value.shifts + copy); refreshWidgets() }
     }
 
     fun openPatternBuilder() {
