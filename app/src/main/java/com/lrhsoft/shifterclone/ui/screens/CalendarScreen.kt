@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +61,7 @@ import com.lrhsoft.shifterclone.model.DayNote
 import com.lrhsoft.shifterclone.model.Shift
 import com.lrhsoft.shifterclone.ui.components.ApplyPatternDialog
 import com.lrhsoft.shifterclone.ui.components.CalendarDayCell
+import com.lrhsoft.shifterclone.ui.components.ContractsSheet
 import com.lrhsoft.shifterclone.ui.components.DayDetailSheet
 import com.lrhsoft.shifterclone.ui.components.ExportSheet
 import com.lrhsoft.shifterclone.ui.components.PatternBuilderDialog
@@ -67,6 +69,7 @@ import com.lrhsoft.shifterclone.ui.components.PatternPickStartBanner
 import com.lrhsoft.shifterclone.ui.components.ProfileSheet
 import com.lrhsoft.shifterclone.ui.components.ShiftEditorDialog
 import com.lrhsoft.shifterclone.ui.components.ShiftsManagerScreen
+import com.lrhsoft.shifterclone.ui.components.StatsPeriod
 import com.lrhsoft.shifterclone.ui.components.StatsSheet
 import com.lrhsoft.shifterclone.ui.components.YearOverview
 import com.lrhsoft.shifterclone.ui.components.YearSummary
@@ -80,15 +83,14 @@ import java.util.Locale
 fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     val showProfile by viewModel.showProfile.collectAsState()
+    val showContracts by viewModel.showContracts.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
     val contracts by viewModel.contracts.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text("Calendario de turnos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                },
+                title = { Text("Calendario de turnos", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF37474F),
                     titleContentColor = Color.White,
@@ -97,6 +99,9 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
                 actions = {
                     IconButton(onClick = { viewModel.openProfile() }) {
                         Icon(Icons.Default.Person, contentDescription = "Perfil")
+                    }
+                    IconButton(onClick = { viewModel.openContracts() }) {
+                        Icon(Icons.Default.Work, contentDescription = "Contratos")
                     }
                     IconButton(onClick = { viewModel.openStats() }) {
                         Icon(Icons.Default.BarChart, contentDescription = "Estadisticas")
@@ -142,9 +147,7 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
             }
         },
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(Color.White)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding).background(Color.White)) {
             TopTabBar(
                 selected = state.topTab,
                 currentMonth = state.currentMonth,
@@ -217,8 +220,14 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     }
     if (state.showStats) {
         val summary = viewModel.computeStats(state)
+        val payroll = if (state.statsPeriod == StatsPeriod.MONTH) {
+            viewModel.estimatePayroll(state.statsYearMonth, state)
+        } else null
         StatsSheet(
-            summary = summary, period = state.statsPeriod, yearMonth = state.statsYearMonth,
+            summary = summary,
+            period = state.statsPeriod,
+            yearMonth = state.statsYearMonth,
+            payroll = payroll,
             onPeriodChange = { viewModel.setStatsPeriod(it) },
             onPrevious = { viewModel.statsPrevious() },
             onNext = { viewModel.statsNext() },
@@ -262,11 +271,15 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     if (showProfile) {
         ProfileSheet(
             profile = userProfile,
-            contracts = contracts,
-            monthEstimate = viewModel.estimatePayroll(state),
             onSaveProfile = { viewModel.saveProfile(it) },
-            onSaveContracts = { viewModel.saveContracts(it) },
             onDismiss = { viewModel.dismissProfile() }
+        )
+    }
+    if (showContracts) {
+        ContractsSheet(
+            contracts = contracts,
+            onSaveContracts = { viewModel.saveContracts(it) },
+            onDismiss = { viewModel.dismissContracts() }
         )
     }
 }
@@ -398,68 +411,6 @@ internal fun RangeActions(
             }
             IconButton(onClick = onClearSelection, enabled = hasRange) {
                 Icon(Icons.Default.Clear, contentDescription = "Quitar seleccion")
-            }
-        }
-    }
-}
-
-@Composable
-internal fun MonthGrid(
-    yearMonth: YearMonth,
-    assignments: Map<String, com.lrhsoft.shifterclone.model.DayAssignment>,
-    shifts: List<Shift>,
-    notes: Map<String, DayNote>,
-    selectedRange: DateRange?,
-    onDayClick: (Int, Int, Int) -> Unit,
-    onDayLongClick: (Int, Int, Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val shiftMap = shifts.associateBy { it.id }
-    val first = yearMonth.atDay(1)
-    val startOffset = (first.dayOfWeek.value - 1) % 7
-    val daysInMonth = yearMonth.lengthOfMonth()
-    val cells = mutableListOf<LocalDate?>()
-    val prev = yearMonth.minusMonths(1)
-    val daysInPrev = prev.lengthOfMonth()
-    for (i in startOffset downTo 1) cells.add(prev.atDay(daysInPrev - i + 1))
-    for (d in 1..daysInMonth) cells.add(yearMonth.atDay(d))
-    val remaining = (7 - cells.size % 7) % 7
-    for (d in 1..remaining) cells.add(yearMonth.plusMonths(1).atDay(d))
-    val today = LocalDate.now()
-    val weekDays = listOf("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
-    val weeks = cells.chunked(7)
-    Column(modifier = modifier) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
-            weekDays.forEach { d ->
-                Text(d, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFF616161))
-            }
-        }
-        weeks.forEach { week ->
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                week.forEach { date ->
-                    val inMonth = date != null && date.month == yearMonth.month
-                    val key = if (date != null) "${date.year}-${date.monthValue}-${date.dayOfMonth}" else ""
-                    val dayShifts = if (inMonth) assignments[key]?.shiftIds?.mapNotNull { shiftMap[it] }.orEmpty() else emptyList()
-                    val note = if (inMonth) notes[key] else null
-                    val isInRange = date != null && selectedRange?.contains(date) == true
-                    val isEndpoint = date != null && (date == selectedRange?.start || date == selectedRange?.end)
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        CalendarDayCell(
-                            dayNumber = date?.dayOfMonth,
-                            isToday = date == today,
-                            isCurrentMonth = inMonth,
-                            isInRange = isInRange,
-                            isRangeEndpoint = isEndpoint,
-                            hasNote = note?.hasText == true,
-                            hasAlarm = note?.hasAlarm == true,
-                            noteText = note?.text?.takeIf { it.isNotBlank() },
-                            shifts = dayShifts,
-                            onClick = { if (date != null && inMonth) onDayClick(date.year, date.monthValue, date.dayOfMonth) },
-                            onLongClick = { if (date != null && inMonth) onDayLongClick(date.year, date.monthValue, date.dayOfMonth) }
-                        )
-                    }
-                }
             }
         }
     }
