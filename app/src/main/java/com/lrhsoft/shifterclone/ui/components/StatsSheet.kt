@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lrhsoft.shifterclone.model.PayrollEstimate
 import com.lrhsoft.shifterclone.model.StatsSummary
 import java.time.YearMonth
 import java.time.format.TextStyle
@@ -47,6 +48,7 @@ fun StatsSheet(
     summary: StatsSummary,
     period: StatsPeriod,
     yearMonth: YearMonth,
+    payroll: PayrollEstimate? = null,
     onPeriodChange: (StatsPeriod) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -61,27 +63,18 @@ fun StatsSheet(
                 .replaceFirstChar { it.uppercase() }
             "$name ${yearMonth.year}"
         }
-        StatsPeriod.YEAR -> "${yearMonth.year}"
+        StatsPeriod.YEAR -> "Ano ${yearMonth.year}"
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Text(
-                text = "Estadísticas",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Text("Estadisticas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -92,12 +85,11 @@ fun StatsSheet(
                 FilterChip(
                     selected = period == StatsPeriod.YEAR,
                     onClick = { onPeriodChange(StatsPeriod.YEAR) },
-                    label = { Text("Año") }
+                    label = { Text("Ano") }
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -112,73 +104,43 @@ fun StatsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
+            Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                StatCard(label = "Dias trabajo", value = "${summary.workDays}", modifier = Modifier.weight(1f))
+                StatCard(label = "Dias libre", value = "${summary.restDays}", modifier = Modifier.weight(1f))
                 StatCard(
                     label = "Horas",
-                    value = summary.hoursFormatted,
-                    modifier = Modifier.weight(1f),
-                    accent = MaterialTheme.colorScheme.primary
+                    value = String.format(Locale.US, "%.1f", summary.totalHours),
+                    modifier = Modifier.weight(1f)
                 )
+            }
+            if (summary.totalEarnings > 0) {
+                Spacer(Modifier.height(8.dp))
                 StatCard(
-                    label = "Ingresos",
-                    value = if (summary.totalEarnings > 0) {
-                        String.format(Locale.US, "%.2f €", summary.totalEarnings)
-                    } else "—",
-                    modifier = Modifier.weight(1f),
+                    label = "Ingresos (tarifa turnos)",
+                    value = String.format(Locale.US, "%.2f EUR", summary.totalEarnings),
+                    modifier = Modifier.fillMaxWidth(),
                     accent = Color(0xFF2E7D32)
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatCard(
-                    label = "Días trabajo",
-                    value = summary.workDays.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    label = "Libres",
-                    value = summary.restDays.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    label = "Sin marcar",
-                    value = summary.emptyDays.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Spacer(Modifier.height(16.dp))
+            Text("Por turno", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
 
             if (summary.byShift.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(
-                    text = "Desglose por turno",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
                 summary.byShift.forEach { item ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(Color(item.shift.color)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -196,16 +158,16 @@ fun StatsSheet(
                                 val h = item.totalHours.toInt()
                                 val m = ((item.totalHours - h) * 60).toInt()
                                 if (m == 0) "${h}h" else "${h}h ${m}m"
-                            } else "—"
+                            } else "-"
                             Text(
-                                text = "${item.count} días · $hoursText",
+                                text = "${item.count} dias · $hoursText",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                         if (item.totalEarnings > 0) {
                             Text(
-                                text = String.format(Locale.US, "%.2f €", item.totalEarnings),
+                                text = String.format(Locale.US, "%.2f EUR", item.totalEarnings),
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF2E7D32)
                             )
@@ -216,7 +178,7 @@ fun StatsSheet(
             } else {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "No hay turnos en este periodo.\nPinta algunos días y vuelve aquí.",
+                    text = "No hay turnos en este periodo.\nPinta algunos dias y vuelve aqui.",
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     lineHeight = 20.sp
                 )
@@ -224,10 +186,71 @@ fun StatsSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Las horas se calculan con el horario de cada turno. Configura la tarifa €/h al editar un turno.",
+                text = "Las horas se calculan con el horario de cada turno. Configura la tarifa EUR/h al editar un turno.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
+
+            if (payroll != null && period == StatsPeriod.MONTH) {
+                Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Estimacion nomina (bruto orientativo)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = "Fijos prorrateados por dias trabajados (${payroll.workDays} / dias del mes). Variables segun turnos pintados.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard(
+                        label = "Fijo prorrateado",
+                        value = String.format(Locale.US, "%.2f EUR", payroll.fixedMonthly),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "Variables",
+                        value = String.format(Locale.US, "%.2f EUR", payroll.variableFromShifts),
+                        modifier = Modifier.weight(1f),
+                        accent = Color(0xFF1565C0)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                StatCard(
+                    label = "Total estimado",
+                    value = String.format(Locale.US, "%.2f EUR", payroll.totalEstimated),
+                    modifier = Modifier.fillMaxWidth(),
+                    accent = Color(0xFF2E7D32)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Noches: ${payroll.nights} · Fest. dia: ${payroll.festivoDays} · Fest. noche: ${payroll.festivoNights}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Desglose", fontWeight = FontWeight.SemiBold)
+                payroll.breakdown.forEach { (label, amount) ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        Text(label, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                        Text(String.format(Locale.US, "%.2f EUR", amount), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Text(
+                    text = "No incluye IRPF, Seguridad Social ni actualizaciones posteriores a 2019.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -246,12 +269,7 @@ private fun StatCard(
             .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = accent
-        )
+        Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = accent)
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
