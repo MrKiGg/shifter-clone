@@ -6,9 +6,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lrhsoft.shifterclone.model.CeladorCategory
 import com.lrhsoft.shifterclone.model.DayAssignment
 import com.lrhsoft.shifterclone.model.DayNote
+import com.lrhsoft.shifterclone.model.PayGroup
 import com.lrhsoft.shifterclone.model.Shift
+import com.lrhsoft.shifterclone.model.UserProfile
+import com.lrhsoft.shifterclone.model.WorkContract
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -21,17 +25,14 @@ class ShiftRepository(private val context: Context) {
     private val shiftsKey = stringPreferencesKey("shifts")
     private val assignmentsKey = stringPreferencesKey("assignments")
     private val notesKey = stringPreferencesKey("notes")
+    private val profileKey = stringPreferencesKey("user_profile")
+    private val contractsKey = stringPreferencesKey("work_contracts")
 
-    // ---------- Shifts ----------
     val shiftsFlow: Flow<List<Shift>> = context.dataStore.data.map { prefs ->
         val json = prefs[shiftsKey] ?: return@map Shift.DEFAULT_SHIFTS
         parseShifts(json).ifEmpty { Shift.DEFAULT_SHIFTS }
     }
 
-    /**
-     * Guarda los turnos por defecto la primera vez para que los IDs no cambien
-     * entre sesiones (si no, los días pintados pierden la referencia al turno).
-     */
     suspend fun ensureDefaults() {
         context.dataStore.edit { prefs ->
             if (prefs[shiftsKey].isNullOrBlank()) {
@@ -46,7 +47,6 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    // ---------- Assignments ----------
     val assignmentsFlow: Flow<Map<String, DayAssignment>> = context.dataStore.data.map { prefs ->
         val json = prefs[assignmentsKey] ?: return@map emptyMap()
         parseAssignments(json)
@@ -66,10 +66,6 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Aplica varias asignaciones de una vez (más eficiente para rangos y patrones).
-     * Cada entrada: Triple(year, month, day) → lista de shiftIds (vacía = borrar).
-     */
     suspend fun applyBulk(updates: Map<Triple<Int, Int, Int>, List<String>>) {
         context.dataStore.edit { prefs ->
             val current = parseAssignments(prefs[assignmentsKey] ?: "{}").toMutableMap()
@@ -108,7 +104,6 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    // ---------- Notes ----------
     val notesFlow: Flow<Map<String, DayNote>> = context.dataStore.data.map { prefs ->
         val json = prefs[notesKey] ?: return@map emptyMap()
         parseNotes(json)
@@ -134,7 +129,28 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    // ---------- JSON helpers ----------
+    val profileFlow: Flow<UserProfile> = context.dataStore.data.map { prefs ->
+        val json = prefs[profileKey] ?: return@map UserProfile()
+        parseProfile(json)
+    }
+
+    suspend fun saveProfile(profile: UserProfile) {
+        context.dataStore.edit { prefs ->
+            prefs[profileKey] = profileToJson(profile)
+        }
+    }
+
+    val contractsFlow: Flow<List<WorkContract>> = context.dataStore.data.map { prefs ->
+        val json = prefs[contractsKey] ?: return@map emptyList()
+        parseContracts(json)
+    }
+
+    suspend fun saveContracts(contracts: List<WorkContract>) {
+        context.dataStore.edit { prefs ->
+            prefs[contractsKey] = contractsToJson(contracts)
+        }
+    }
+
     private fun shiftsToJson(shifts: List<Shift>): String {
         val arr = JSONArray()
         shifts.forEach { s ->
@@ -255,6 +271,81 @@ class ShiftRepository(private val context: Context) {
             result
         } catch (e: Exception) {
             emptyMap()
+        }
+    }
+
+    private fun profileToJson(p: UserProfile): String {
+        return JSONObject().apply {
+            put("category", p.category.name)
+            put("group", p.group.name)
+            put("destinoLevel", p.destinoLevel)
+            put("trienios", p.trienios)
+            put("hasTurnicidad", p.hasTurnicidad)
+            put("horasNocheCompleta", p.horasNocheCompleta)
+            put("countNightShiftAsFullNight", p.countNightShiftAsFullNight)
+        }.toString()
+    }
+
+    private fun parseProfile(json: String): UserProfile {
+        return try {
+            val o = JSONObject(json)
+            val cat = runCatching {
+                CeladorCategory.valueOf(o.optString("category", CeladorCategory.POLIVALENTE.name))
+            }.getOrDefault(CeladorCategory.POLIVALENTE)
+            val group = runCatching {
+                PayGroup.valueOf(o.optString("group", PayGroup.E.name))
+            }.getOrDefault(PayGroup.E)
+            UserProfile(
+                category = cat,
+                group = group,
+                destinoLevel = o.optInt("destinoLevel", cat.destinoLevel),
+                trienios = o.optInt("trienios", 0),
+                hasTurnicidad = o.optBoolean("hasTurnicidad", true),
+                horasNocheCompleta = o.optDouble("horasNocheCompleta", 10.0),
+                countNightShiftAsFullNight = o.optBoolean("countNightShiftAsFullNight", true)
+            )
+        } catch (e: Exception) {
+            UserProfile()
+        }
+    }
+
+    private fun contractsToJson(list: List<WorkContract>): String {
+        val arr = JSONArray()
+        list.forEach { c ->
+            arr.put(JSONObject().apply {
+                put("id", c.id)
+                put("name", c.name)
+                put("startDate", c.startDate)
+                put("endDate", c.endDate)
+                put("center", c.center)
+                put("hasTurnicidad", c.hasTurnicidad)
+                put("notes", c.notes)
+            })
+        }
+        return arr.toString()
+    }
+
+    private fun parseContracts(json: String): List<WorkContract> {
+        return try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<WorkContract>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    WorkContract(
+                        id = o.getString("id"),
+                        name = o.getString("name"),
+                        startDate = o.getString("startDate"),
+                        endDate = if (o.isNull("endDate") || !o.has("endDate")) null else o.getString("endDate").ifBlank { null },
+                        center = o.optString("center", ""),
+                        hasTurnicidad = o.optBoolean("hasTurnicidad", true),
+                        notes = o.optString("notes", "")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 }
