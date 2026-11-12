@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +27,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +64,7 @@ import com.lrhsoft.shifterclone.ui.components.DayDetailSheet
 import com.lrhsoft.shifterclone.ui.components.ExportSheet
 import com.lrhsoft.shifterclone.ui.components.PatternBuilderDialog
 import com.lrhsoft.shifterclone.ui.components.PatternPickStartBanner
+import com.lrhsoft.shifterclone.ui.components.ProfileSheet
 import com.lrhsoft.shifterclone.ui.components.ShiftEditorDialog
 import com.lrhsoft.shifterclone.ui.components.ShiftsManagerScreen
 import com.lrhsoft.shifterclone.ui.components.StatsSheet
@@ -76,20 +77,17 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun CalendarScreen(
-    viewModel: CalendarViewModel = viewModel()
-) {
+fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
+    val showProfile by viewModel.showProfile.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
+    val contracts by viewModel.contracts.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Calendario de turnos",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    Text("Calendario de turnos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF37474F),
@@ -97,6 +95,9 @@ fun CalendarScreen(
                     actionIconContentColor = Color.White
                 ),
                 actions = {
+                    IconButton(onClick = { viewModel.openProfile() }) {
+                        Icon(Icons.Default.Person, contentDescription = "Perfil")
+                    }
                     IconButton(onClick = { viewModel.openStats() }) {
                         Icon(Icons.Default.BarChart, contentDescription = "Estadisticas")
                     }
@@ -142,10 +143,7 @@ fun CalendarScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(Color.White)
+            modifier = Modifier.fillMaxSize().padding(padding).background(Color.White)
         ) {
             TopTabBar(
                 selected = state.topTab,
@@ -196,7 +194,6 @@ fun CalendarScreen(
             onCreate = { viewModel.openCreateShift() }
         )
     }
-
     if (state.showShiftEditor) {
         ShiftEditorDialog(
             shift = state.editingShift,
@@ -207,35 +204,27 @@ fun CalendarScreen(
             } else null
         )
     }
-
     state.detailDate?.let { date ->
         val note = state.noteFor(date)
-        val dayShifts = state.assignments[
-            "${date.year}-${date.monthValue}-${date.dayOfMonth}"
-        ]?.shiftIds?.mapNotNull { id -> state.shifts.find { it.id == id } }.orEmpty()
+        val dayShifts = state.assignments["${date.year}-${date.monthValue}-${date.dayOfMonth}"]
+            ?.shiftIds?.mapNotNull { id -> state.shifts.find { it.id == id } }.orEmpty()
         DayDetailSheet(
-            date = date,
-            shifts = dayShifts,
-            note = note,
+            date = date, shifts = dayShifts, note = note,
             onDismiss = { viewModel.dismissDayDetail() },
             onSave = { viewModel.saveNote(it) },
             onDelete = { viewModel.deleteNote(date.year, date.monthValue, date.dayOfMonth) }
         )
     }
-
     if (state.showStats) {
         val summary = viewModel.computeStats(state)
         StatsSheet(
-            summary = summary,
-            period = state.statsPeriod,
-            yearMonth = state.statsYearMonth,
+            summary = summary, period = state.statsPeriod, yearMonth = state.statsYearMonth,
             onPeriodChange = { viewModel.setStatsPeriod(it) },
             onPrevious = { viewModel.statsPrevious() },
             onNext = { viewModel.statsNext() },
             onDismiss = { viewModel.dismissStats() }
         )
     }
-
     if (state.showExport) {
         ExportSheet(
             calendars = state.exportCalendars,
@@ -255,7 +244,6 @@ fun CalendarScreen(
             onDismiss = { viewModel.dismissExport() }
         )
     }
-
     if (state.showPatternBuilder) {
         PatternBuilderDialog(
             shifts = state.shifts,
@@ -263,45 +251,38 @@ fun CalendarScreen(
             onConfirm = { viewModel.confirmPatternSequence(it) }
         )
     }
-
     if (state.showApplyPattern && state.patternStartDate != null) {
         ApplyPatternDialog(
             startDate = state.patternStartDate!!,
             patternLength = state.pendingPattern.size,
             onDismiss = { viewModel.dismissApplyPattern() },
-            onApply = { mode, count, until ->
-                viewModel.applyPendingPattern(mode.name, count, until)
-            }
+            onApply = { mode, count, until -> viewModel.applyPendingPattern(mode.name, count, until) }
+        )
+    }
+    if (showProfile) {
+        ProfileSheet(
+            profile = userProfile,
+            contracts = contracts,
+            monthEstimate = viewModel.estimatePayroll(state),
+            onSaveProfile = { viewModel.saveProfile(it) },
+            onSaveContracts = { viewModel.saveContracts(it) },
+            onDismiss = { viewModel.dismissProfile() }
         )
     }
 }
 
 @Composable
-internal fun MonthHeader(
-    yearMonth: YearMonth,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit
-) {
-    val monthName = yearMonth.month
-        .getDisplayName(TextStyle.FULL, Locale("es", "ES"))
-        .replaceFirstChar { it.uppercase() }
+internal fun MonthHeader(yearMonth: YearMonth, onPrevious: () -> Unit, onNext: () -> Unit) {
+    val monthName = yearMonth.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onPrevious) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Mes anterior", tint = Color(0xFF212121))
         }
-        Text(
-            text = "$monthName ${yearMonth.year}".uppercase(Locale("es", "ES")),
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF212121)
-        )
+        Text("$monthName ${yearMonth.year}".uppercase(Locale("es", "ES")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
         IconButton(onClick = onNext) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Mes siguiente", tint = Color(0xFF212121))
         }
@@ -310,19 +291,14 @@ internal fun MonthHeader(
 
 @Composable
 internal fun BottomModeBar(
-    mode: EditMode,
-    patternActive: Boolean = false,
-    onPaint: () -> Unit,
-    onEdit: () -> Unit,
-    onPattern: () -> Unit,
-    onShifts: () -> Unit
+    mode: EditMode, patternActive: Boolean = false,
+    onPaint: () -> Unit, onEdit: () -> Unit, onPattern: () -> Unit, onShifts: () -> Unit
 ) {
     val selectedColor = Color(0xFFD32F2F)
     val unselectedColor = Color(0xFF757575)
     NavigationBar(containerColor = Color(0xFFFAFAFA), contentColor = selectedColor, tonalElevation = 4.dp) {
         NavigationBarItem(
-            selected = mode == EditMode.PAINT,
-            onClick = onPaint,
+            selected = mode == EditMode.PAINT, onClick = onPaint,
             icon = { Icon(Icons.Default.Brush, contentDescription = null) },
             label = { Text("PINTAR", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
             colors = NavigationBarItemDefaults.colors(
@@ -332,8 +308,7 @@ internal fun BottomModeBar(
             )
         )
         NavigationBarItem(
-            selected = mode == EditMode.EDIT,
-            onClick = onEdit,
+            selected = mode == EditMode.EDIT, onClick = onEdit,
             icon = { Icon(Icons.Default.Edit, contentDescription = null) },
             label = { Text("EDITAR", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
             colors = NavigationBarItemDefaults.colors(
@@ -343,8 +318,7 @@ internal fun BottomModeBar(
             )
         )
         NavigationBarItem(
-            selected = patternActive,
-            onClick = onPattern,
+            selected = patternActive, onClick = onPattern,
             icon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
             label = { Text("PATRON", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
             colors = NavigationBarItemDefaults.colors(
@@ -354,8 +328,7 @@ internal fun BottomModeBar(
             )
         )
         NavigationBarItem(
-            selected = false,
-            onClick = onShifts,
+            selected = false, onClick = onShifts,
             icon = { Icon(Icons.Default.List, contentDescription = null) },
             label = { Text("TURNOS", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
             colors = NavigationBarItemDefaults.colors(
@@ -369,49 +342,32 @@ internal fun BottomModeBar(
 
 @Composable
 internal fun PaintPaletteBar(
-    shifts: List<Shift>,
-    selectedId: String?,
-    isEraser: Boolean,
-    onSelectShift: (String) -> Unit,
-    onSelectEraser: () -> Unit
+    shifts: List<Shift>, selectedId: String?, isEraser: Boolean,
+    onSelectShift: (String) -> Unit, onSelectEraser: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFECEFF1))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFECEFF1))
+            .horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
+            modifier = Modifier.clip(RoundedCornerShape(20.dp))
                 .background(if (isEraser) Color(0xFFD32F2F) else Color(0xFFB0BEC5))
                 .border(if (isEraser) 2.5.dp else 0.dp, Color.Black, RoundedCornerShape(20.dp))
-                .clickable(onClick = onSelectEraser)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .clickable(onClick = onSelectEraser).padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Text("Borrar turno", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
         shifts.forEach { shift ->
             val selected = !isEraser && shift.id == selectedId
             Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(shift.toComposeColor())
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(shift.toComposeColor())
                     .border(if (selected) 2.5.dp else 0.dp, Color.Black, RoundedCornerShape(20.dp))
-                    .clickable { onSelectShift(shift.id) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .clickable { onSelectShift(shift.id) }.padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Text(
-                    "${shift.abbreviation} · ${shift.name}",
-                    color = shift.toTextComposeColor(),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text("${shift.abbreviation} · ${shift.name}", color = shift.toTextComposeColor(),
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -419,32 +375,16 @@ internal fun PaintPaletteBar(
 
 @Composable
 internal fun RangeActions(
-    hasRange: Boolean,
-    rangeSize: Int,
-    onApply: () -> Unit,
-    onClear: () -> Unit,
-    onRepeat: () -> Unit,
-    onClearSelection: () -> Unit
+    hasRange: Boolean, rangeSize: Int,
+    onApply: () -> Unit, onClear: () -> Unit, onRepeat: () -> Unit, onClearSelection: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFECEFF1))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFECEFF1)).padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (hasRange) {
-            Text(
-                "$rangeSize dia(s) seleccionado(s)",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFD32F2F),
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
+            Text("$rangeSize dia(s) seleccionado(s)", style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFD32F2F), modifier = Modifier.padding(bottom = 4.dp))
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onApply, enabled = hasRange, modifier = Modifier.weight(1f)) {
                 Text("Aplicar", fontSize = 12.sp)
             }
@@ -485,22 +425,14 @@ internal fun MonthGrid(
     for (d in 1..daysInMonth) cells.add(yearMonth.atDay(d))
     val remaining = (7 - cells.size % 7) % 7
     for (d in 1..remaining) cells.add(yearMonth.plusMonths(1).atDay(d))
-
     val today = LocalDate.now()
     val weekDays = listOf("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
     val weeks = cells.chunked(7)
-
     Column(modifier = modifier) {
         Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
             weekDays.forEach { d ->
-                Text(
-                    d,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    color = Color(0xFF616161)
-                )
+                Text(d, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFF616161))
             }
         }
         weeks.forEach { week ->
@@ -523,12 +455,8 @@ internal fun MonthGrid(
                             hasAlarm = note?.hasAlarm == true,
                             noteText = note?.text?.takeIf { it.isNotBlank() },
                             shifts = dayShifts,
-                            onClick = {
-                                if (date != null && inMonth) onDayClick(date.year, date.monthValue, date.dayOfMonth)
-                            },
-                            onLongClick = {
-                                if (date != null && inMonth) onDayLongClick(date.year, date.monthValue, date.dayOfMonth)
-                            }
+                            onClick = { if (date != null && inMonth) onDayClick(date.year, date.monthValue, date.dayOfMonth) },
+                            onLongClick = { if (date != null && inMonth) onDayLongClick(date.year, date.monthValue, date.dayOfMonth) }
                         )
                     }
                 }
