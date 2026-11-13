@@ -215,7 +215,8 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
             contracts = dayContracts,
             onDismiss = { viewModel.dismissDayDetail() },
             onSave = { viewModel.saveNote(it) },
-            onDelete = { viewModel.deleteNote(date.year, date.monthValue, date.dayOfMonth) }
+            onDelete = { viewModel.deleteNote(date.year, date.monthValue, date.dayOfMonth) },
+            onContractClick = { viewModel.focusContract(it) }
         )
     }
     if (state.showStats) {
