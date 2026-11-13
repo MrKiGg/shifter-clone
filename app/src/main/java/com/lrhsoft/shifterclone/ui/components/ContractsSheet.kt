@@ -62,6 +62,7 @@ fun ContractsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var local by remember { mutableStateOf(contracts) }
+    var editing by remember { mutableStateOf<WorkContract?>(null) }
     var showForm by remember { mutableStateOf(false) }
     val now = YearMonth.now()
     var filterYear by remember { mutableIntStateOf(now.year) }
@@ -114,14 +115,18 @@ fun ContractsSheet(
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Contratos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Cerrar") }
             }
-            Text("Filtra por mes, pulsa un contrato para verlo en el calendario.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Filtra por mes. Pulsa el nombre para verlo en el calendario, o Editar para cambiarlo.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(12.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ExposedDropdownMenuBox(expanded = yearExpanded, onExpandedChange = { yearExpanded = it }, modifier = Modifier.weight(1f)) {
                     OutlinedTextField(
                         value = filterYear.toString(), onValueChange = {}, readOnly = true, label = { Text("Ano") },
@@ -158,39 +163,60 @@ fun ContractsSheet(
             )
             Spacer(Modifier.height(8.dp))
 
-            if (filtered.isEmpty()) {
+            if (filtered.isEmpty() && !showForm) {
                 Text("No hay contratos en este periodo.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
             }
 
-            filtered.forEach { c ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        onSaveContracts(local)
-                        onOpenContract(c)
-                    }.padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(c.name, fontWeight = FontWeight.Medium)
+            if (!showForm) {
+                filtered.forEach { c ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Text(
+                            c.name,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                onSaveContracts(local)
+                                onOpenContract(c)
+                            }
+                        )
                         Text("${c.startDate} -> ${c.endDate ?: "abierto"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (c.center.isNotBlank()) {
                             Text(c.center, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { editing = c; showForm = true }) { Text("Editar") }
+                            TextButton(onClick = { local = local.filter { it.id != c.id } }) { Text("Borrar") }
+                            TextButton(onClick = { onSaveContracts(local); onOpenContract(c) }) { Text("Ver en calendario") }
+                        }
                     }
-                    TextButton(onClick = { local = local.filter { it.id != c.id } }) { Text("Borrar") }
+                    HorizontalDivider()
                 }
-                HorizontalDivider()
             }
 
             Spacer(Modifier.height(8.dp))
             if (!showForm) {
-                Button(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth()) { Text("+ Anadir contrato") }
+                Button(onClick = { editing = null; showForm = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("+ Anadir contrato")
+                }
             } else {
-                ContractForm(onCancel = { showForm = false }, onAdd = { c -> local = local + c; showForm = false })
+                Text(if (editing != null) "Editar contrato" else "Nuevo contrato", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Spacer(Modifier.height(6.dp))
+                ContractForm(
+                    initial = editing,
+                    onCancel = { showForm = false; editing = null },
+                    onSave = { contract ->
+                        local = if (editing != null) local.map { if (it.id == contract.id) contract else it } else local + contract
+                        showForm = false
+                        editing = null
+                    }
+                )
             }
 
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { onSaveContracts(local); onDismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Guardar contratos") }
+            if (!showForm) {
+                Button(onClick = { onSaveContracts(local); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Guardar contratos")
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -198,12 +224,16 @@ fun ContractsSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ContractForm(onCancel: () -> Unit, onAdd: (WorkContract) -> Unit) {
-    var name by remember { mutableStateOf("Contrato") }
-    var start by remember { mutableStateOf(LocalDate.now().toString()) }
-    var end by remember { mutableStateOf("") }
-    var center by remember { mutableStateOf("") }
-    var turnicidad by remember { mutableStateOf(true) }
+private fun ContractForm(
+    initial: WorkContract?,
+    onCancel: () -> Unit,
+    onSave: (WorkContract) -> Unit
+) {
+    var name by remember { mutableStateOf(initial?.name ?: "Contrato") }
+    var start by remember { mutableStateOf(initial?.startDate ?: LocalDate.now().toString()) }
+    var end by remember { mutableStateOf(initial?.endDate ?: "") }
+    var center by remember { mutableStateOf(initial?.center ?: "") }
+    var turnicidad by remember { mutableStateOf(initial?.hasTurnicidad ?: true) }
     var pickStart by remember { mutableStateOf(false) }
     var pickEnd by remember { mutableStateOf(false) }
 
@@ -221,10 +251,21 @@ private fun ContractForm(onCancel: () -> Unit, onAdd: (WorkContract) -> Unit) {
             Button(onClick = {
                 if (name.isBlank() || !isValidDate(start)) return@Button
                 if (end.isNotBlank() && !isValidDate(end)) return@Button
-                onAdd(WorkContract(id = UUID.randomUUID().toString(), name = name.trim(), startDate = start.trim(), endDate = end.trim().ifBlank { null }, center = center.trim(), hasTurnicidad = turnicidad))
-            }) { Text("Anadir") }
+                onSave(
+                    WorkContract(
+                        id = initial?.id ?: UUID.randomUUID().toString(),
+                        name = name.trim(),
+                        startDate = start.trim(),
+                        endDate = end.trim().ifBlank { null },
+                        center = center.trim(),
+                        hasTurnicidad = turnicidad,
+                        notes = initial?.notes ?: ""
+                    )
+                )
+            }) { Text(if (initial != null) "Guardar cambios" else "Anadir") }
         }
     }
+
     if (pickStart) DatePickDialog(parseDateOrToday(start), { pickStart = false }) { start = it.toString(); pickStart = false }
     if (pickEnd) DatePickDialog(parseDateOrToday(end.ifBlank { start }), { pickEnd = false }) { end = it.toString(); pickEnd = false }
 }
@@ -245,7 +286,12 @@ private fun DatePickDialog(initial: LocalDate, onDismiss: () -> Unit, onConfirm:
     val state = rememberDatePickerState(initialSelectedDateMillis = millis)
     DatePickerDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { val selected = state.selectedDateMillis ?: return@TextButton; onConfirm(Instant.ofEpochMilli(selected).atZone(ZoneOffset.UTC).toLocalDate()) }) { Text("OK") } },
+        confirmButton = {
+            TextButton(onClick = {
+                val selected = state.selectedDateMillis ?: return@TextButton
+                onConfirm(Instant.ofEpochMilli(selected).atZone(ZoneOffset.UTC).toLocalDate())
+            }) { Text("OK") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     ) { DatePicker(state = state) }
 }
