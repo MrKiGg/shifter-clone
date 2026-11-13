@@ -123,6 +123,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _showApplyPattern = MutableStateFlow(false)
     private val _showProfile = MutableStateFlow(false)
     private val _showContracts = MutableStateFlow(false)
+    private val _focusedContractId = MutableStateFlow<String?>(null)
 
     private data class ModeState(
         val selectedShiftId: String?, val isEraserSelected: Boolean, val editMode: EditMode,
@@ -189,11 +190,22 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val contracts: StateFlow<List<WorkContract>> = repo.contractsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val showProfile: StateFlow<Boolean> = _showProfile
     val showContracts: StateFlow<Boolean> = _showContracts
+    val focusedContractId: StateFlow<String?> = _focusedContractId
 
     fun openProfile() { _showProfile.value = true }
     fun dismissProfile() { _showProfile.value = false }
     fun openContracts() { _showContracts.value = true }
     fun dismissContracts() { _showContracts.value = false }
+    fun clearFocusedContract() { _focusedContractId.value = null }
+    fun focusContract(contract: WorkContract) {
+        try {
+            val start = LocalDate.parse(contract.startDate)
+            _currentMonth.value = YearMonth.from(start)
+        } catch (_: Exception) { }
+        _focusedContractId.value = contract.id
+        _topTab.value = TopTab.MONTH
+        _showContracts.value = false
+    }
     fun saveProfile(profile: UserProfile) { viewModelScope.launch { repo.saveProfile(profile) } }
     fun saveContracts(list: List<WorkContract>) { viewModelScope.launch { repo.saveContracts(list) } }
 
