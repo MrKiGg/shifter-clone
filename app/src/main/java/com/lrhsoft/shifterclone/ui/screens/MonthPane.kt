@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -50,6 +52,7 @@ fun MonthPane(
     val rotationY = remember { Animatable(0f) }
     val density = LocalDensity.current.density
     val contracts by viewModel.contracts.collectAsState()
+    val focusedContractId by viewModel.focusedContractId.collectAsState()
 
     LaunchedEffect(state.currentMonth) {
         if (state.currentMonth == displayedMonth) return@LaunchedEffect
@@ -89,6 +92,33 @@ fun MonthPane(
             onPrevious = { viewModel.previousMonth() },
             onNext = { viewModel.nextMonth() }
         )
+        val focused = focusedContractId?.let { id -> contracts.find { it.id == id } }
+        if (focused != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1565C0).copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(focused.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF1565C0))
+                    val place = focused.center.ifBlank { "-" }
+                    Text(
+                        "${focused.startDate} -> ${focused.endDate ?: "abierto"} · $place",
+                        fontSize = 11.sp,
+                        color = Color(0xFF37474F)
+                    )
+                }
+                Text(
+                    "Cerrar",
+                    color = Color(0xFF1565C0),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { viewModel.clearFocusedContract() }.padding(8.dp)
+                )
+            }
+        }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -114,6 +144,7 @@ fun MonthPane(
                 notes = state.notes,
                 selectedRange = state.selectedRange,
                 contracts = contracts,
+                focusedContractId = focusedContractId,
                 onDayClick = { y, m, d -> viewModel.onDayClicked(y, m, d) },
                 onDayLongClick = { y, m, d -> viewModel.onDayLongPressed(y, m, d) }
             )
@@ -129,6 +160,7 @@ internal fun MonthGrid(
     notes: Map<String, DayNote>,
     selectedRange: DateRange?,
     contracts: List<WorkContract> = emptyList(),
+    focusedContractId: String? = null,
     onDayClick: (Int, Int, Int) -> Unit,
     onDayLongClick: (Int, Int, Int) -> Unit,
     modifier: Modifier = Modifier
@@ -141,17 +173,17 @@ internal fun MonthGrid(
             val start = LocalDate.parse(c.startDate)
             val end = c.endDate?.let { LocalDate.parse(it) }
             !start.isAfter(monthEnd) && (end == null || !end.isBefore(monthStart))
-        } catch (_: Exception) {
-            false
-        }
+        } catch (_: Exception) { false }
     }
-    val showContractHighlight = contractsInMonth.size > 1
     val today = LocalDate.now()
-    val activeContract = if (showContractHighlight) {
-        contractsInMonth.firstOrNull { it.contains(today) }
-            ?: contractsInMonth.firstOrNull { it.contains(monthStart) }
-            ?: contractsInMonth.firstOrNull()
-    } else null
+    val focused = focusedContractId?.let { id -> contracts.find { it.id == id } }
+    val showContractHighlight = focused != null || contractsInMonth.size > 1
+    val activeContract = focused
+        ?: if (contractsInMonth.size > 1) {
+            contractsInMonth.firstOrNull { it.contains(today) }
+                ?: contractsInMonth.firstOrNull { it.contains(monthStart) }
+                ?: contractsInMonth.firstOrNull()
+        } else null
 
     val first = yearMonth.atDay(1)
     val startOffset = (first.dayOfWeek.value - 1) % 7
@@ -168,14 +200,7 @@ internal fun MonthGrid(
     Column(modifier = modifier) {
         Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
             weekDays.forEach { d ->
-                Text(
-                    d,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    color = Color(0xFF616161)
-                )
+                Text(d, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFF616161))
             }
         }
         weeks.forEach { week ->
@@ -183,15 +208,11 @@ internal fun MonthGrid(
                 week.forEach { date ->
                     val inMonth = date != null && date.month == yearMonth.month
                     val key = if (date != null) "${date.year}-${date.monthValue}-${date.dayOfMonth}" else ""
-                    val dayShifts = if (inMonth) {
-                        assignments[key]?.shiftIds?.mapNotNull { shiftMap[it] }.orEmpty()
-                    } else emptyList()
+                    val dayShifts = if (inMonth) assignments[key]?.shiftIds?.mapNotNull { shiftMap[it] }.orEmpty() else emptyList()
                     val note = if (inMonth) notes[key] else null
                     val isInRange = date != null && selectedRange?.contains(date) == true
-                    val isEndpoint = date != null &&
-                        (date == selectedRange?.start || date == selectedRange?.end)
-                    val inActiveContract = showContractHighlight &&
-                        inMonth && date != null && activeContract?.contains(date) == true
+                    val isEndpoint = date != null && (date == selectedRange?.start || date == selectedRange?.end)
+                    val inActiveContract = showContractHighlight && inMonth && date != null && activeContract?.contains(date) == true
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         CalendarDayCell(
                             dayNumber = date?.dayOfMonth,
@@ -204,16 +225,8 @@ internal fun MonthGrid(
                             hasAlarm = note?.hasAlarm == true,
                             noteText = note?.text?.takeIf { it.isNotBlank() },
                             shifts = dayShifts,
-                            onClick = {
-                                if (date != null && inMonth) {
-                                    onDayClick(date.year, date.monthValue, date.dayOfMonth)
-                                }
-                            },
-                            onLongClick = {
-                                if (date != null && inMonth) {
-                                    onDayLongClick(date.year, date.monthValue, date.dayOfMonth)
-                                }
-                            }
+                            onClick = { if (date != null && inMonth) onDayClick(date.year, date.monthValue, date.dayOfMonth) },
+                            onLongClick = { if (date != null && inMonth) onDayLongClick(date.year, date.monthValue, date.dayOfMonth) }
                         )
                     }
                 }
