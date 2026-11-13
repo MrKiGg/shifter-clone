@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.lrhsoft.shifterclone.model.DayAssignment
 import com.lrhsoft.shifterclone.model.DayNote
 import com.lrhsoft.shifterclone.model.Shift
+import com.lrhsoft.shifterclone.model.WorkContract
 import com.lrhsoft.shifterclone.ui.components.CalendarDayCell
 import java.time.LocalDate
 import java.time.YearMonth
@@ -47,6 +49,7 @@ fun MonthPane(
     var displayedMonth by remember { mutableStateOf(state.currentMonth) }
     val rotationY = remember { Animatable(0f) }
     val density = LocalDensity.current.density
+    val contracts by viewModel.contracts.collectAsState()
 
     LaunchedEffect(state.currentMonth) {
         if (state.currentMonth == displayedMonth) return@LaunchedEffect
@@ -110,6 +113,7 @@ fun MonthPane(
                 shifts = state.shifts,
                 notes = state.notes,
                 selectedRange = state.selectedRange,
+                contracts = contracts,
                 onDayClick = { y, m, d -> viewModel.onDayClicked(y, m, d) },
                 onDayLongClick = { y, m, d -> viewModel.onDayLongPressed(y, m, d) }
             )
@@ -124,11 +128,31 @@ internal fun MonthGrid(
     shifts: List<Shift>,
     notes: Map<String, DayNote>,
     selectedRange: DateRange?,
+    contracts: List<WorkContract> = emptyList(),
     onDayClick: (Int, Int, Int) -> Unit,
     onDayLongClick: (Int, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shiftMap = shifts.associateBy { it.id }
+    val monthStart = yearMonth.atDay(1)
+    val monthEnd = yearMonth.atEndOfMonth()
+    val contractsInMonth = contracts.filter { c ->
+        try {
+            val start = LocalDate.parse(c.startDate)
+            val end = c.endDate?.let { LocalDate.parse(it) }
+            !start.isAfter(monthEnd) && (end == null || !end.isBefore(monthStart))
+        } catch (_: Exception) {
+            false
+        }
+    }
+    val showContractHighlight = contractsInMonth.size > 1
+    val today = LocalDate.now()
+    val activeContract = if (showContractHighlight) {
+        contractsInMonth.firstOrNull { it.contains(today) }
+            ?: contractsInMonth.firstOrNull { it.contains(monthStart) }
+            ?: contractsInMonth.firstOrNull()
+    } else null
+
     val first = yearMonth.atDay(1)
     val startOffset = (first.dayOfWeek.value - 1) % 7
     val daysInMonth = yearMonth.lengthOfMonth()
@@ -139,7 +163,6 @@ internal fun MonthGrid(
     for (d in 1..daysInMonth) cells.add(yearMonth.atDay(d))
     val remaining = (7 - cells.size % 7) % 7
     for (d in 1..remaining) cells.add(yearMonth.plusMonths(1).atDay(d))
-    val today = LocalDate.now()
     val weekDays = listOf("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
     val weeks = cells.chunked(7)
     Column(modifier = modifier) {
@@ -167,6 +190,8 @@ internal fun MonthGrid(
                     val isInRange = date != null && selectedRange?.contains(date) == true
                     val isEndpoint = date != null &&
                         (date == selectedRange?.start || date == selectedRange?.end)
+                    val inActiveContract = showContractHighlight &&
+                        inMonth && date != null && activeContract?.contains(date) == true
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         CalendarDayCell(
                             dayNumber = date?.dayOfMonth,
@@ -174,6 +199,7 @@ internal fun MonthGrid(
                             isCurrentMonth = inMonth,
                             isInRange = isInRange,
                             isRangeEndpoint = isEndpoint,
+                            isInActiveContract = inActiveContract,
                             hasNote = note?.hasText == true,
                             hasAlarm = note?.hasAlarm == true,
                             noteText = note?.text?.takeIf { it.isNotBlank() },

@@ -35,6 +35,7 @@ fun CalendarDayCell(
     isCurrentMonth: Boolean,
     isInRange: Boolean = false,
     isRangeEndpoint: Boolean = false,
+    isInActiveContract: Boolean = false,
     hasNote: Boolean = false,
     hasAlarm: Boolean = false,
     noteText: String? = null,
@@ -45,11 +46,11 @@ fun CalendarDayCell(
 ) {
     val shape = RoundedCornerShape(0.dp)
 
-    // Bordes interiores claros; el contorno exterior fuerte lo pinta el grid
     val borderWidth = when {
         isRangeEndpoint -> 2.dp
         isInRange -> 1.5.dp
         isToday -> 1.5.dp
+        isInActiveContract -> 1.5.dp
         isCurrentMonth -> 0.5.dp
         else -> 0.4.dp
     }
@@ -57,6 +58,7 @@ fun CalendarDayCell(
         isRangeEndpoint -> Color(0xFFD32F2F)
         isInRange -> Color(0xFFD32F2F).copy(alpha = 0.65f)
         isToday -> Color(0xFFD32F2F)
+        isInActiveContract -> Color(0xFF1565C0)
         isCurrentMonth -> Color(0xFFB0B0B0)
         else -> Color(0xFFD0D0D0)
     }
@@ -76,6 +78,8 @@ fun CalendarDayCell(
                     !isCurrentMonth -> Color(0xFFF5F5F5)
                     isInRange && shifts.isEmpty() -> Color(0xFFD32F2F).copy(alpha = 0.12f)
                     shifts.isNotEmpty() -> shifts.first().toComposeColor()
+                    isInActiveContract -> Color(0xFF1565C0).copy(alpha = 0.12f)
+                    isToday -> Color(0xFFD32F2F).copy(alpha = 0.08f)
                     else -> Color.White
                 }
             )
@@ -97,14 +101,6 @@ fun CalendarDayCell(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = dayNumber.toString(),
-                        fontSize = 13.sp,
-                        fontWeight = if (isToday || isRangeEndpoint) FontWeight.Bold else FontWeight.Medium,
-                        color = contentColor,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start
-                    )
                     if (isCurrentMonth && hasAlarm) {
                         Box(
                             modifier = Modifier
@@ -113,6 +109,22 @@ fun CalendarDayCell(
                                 .background(Color(0xFFFFC107))
                         )
                     }
+                    Text(
+                        text = dayNumber.toString(),
+                        fontSize = 13.sp,
+                        fontWeight = when {
+                            isToday || isRangeEndpoint -> FontWeight.Bold
+                            isInActiveContract -> FontWeight.SemiBold
+                            else -> FontWeight.Medium
+                        },
+                        color = when {
+                            isToday && shifts.isEmpty() -> Color(0xFFD32F2F)
+                            isInActiveContract && shifts.isEmpty() -> Color(0xFF1565C0)
+                            else -> contentColor
+                        },
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.End
+                    )
                 }
 
                 if (shifts.isNotEmpty() && isCurrentMonth) {
