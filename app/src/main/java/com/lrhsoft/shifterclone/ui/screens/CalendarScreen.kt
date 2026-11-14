@@ -86,7 +86,7 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Calendario de turnos", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                title = { Text("Txandaka", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF37474F),
                     titleContentColor = Color.White,
