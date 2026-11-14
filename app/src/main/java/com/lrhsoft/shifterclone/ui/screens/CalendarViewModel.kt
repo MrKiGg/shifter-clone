@@ -123,6 +123,8 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _pendingPattern = MutableStateFlow<List<String?>>(emptyList())
     private val _patternStartDate = MutableStateFlow<LocalDate?>(null)
     private val _showApplyPattern = MutableStateFlow(false)
+    private val _showPatternConfirmBar = MutableStateFlow(false)
+    private val _patternUndoSnapshot = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     private val _showProfile = MutableStateFlow(false)
     private val _showContracts = MutableStateFlow(false)
     private val _focusedContractId = MutableStateFlow<String?>(null)
@@ -195,6 +197,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val focusedContractId: StateFlow<String?> = _focusedContractId
     val savedPatterns: StateFlow<List<SavedPattern>> = repo.patternsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val showPatternsList: StateFlow<Boolean> = _showPatternsList
+    val showPatternConfirmBar: StateFlow<Boolean> = _showPatternConfirmBar
 
     fun openProfile() { _showProfile.value = true }
     fun dismissProfile() { _showProfile.value = false }
@@ -423,20 +426,51 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             else -> YearMonth.from(startDate).atEndOfMonth()
         }
         if (endDate.isBefore(startDate)) return
+        val currentAssignments = uiState.value.assignments
         viewModelScope.launch {
             val updates = mutableMapOf<Triple<Int, Int, Int>, List<String>>()
+            val snapshot = mutableMapOf<String, List<String>>()
             var cursor = startDate; var index = 0
             while (!cursor.isAfter(endDate)) {
+                val key = DayAssignment.key(cursor.year, cursor.monthValue, cursor.dayOfMonth)
+                snapshot[key] = currentAssignments[key]?.shiftIds ?: emptyList()
                 val shiftId = pattern[index % pattern.size]
                 updates[Triple(cursor.year, cursor.monthValue, cursor.dayOfMonth)] =
                     if (shiftId == null) emptyList() else listOf(shiftId)
                 cursor = cursor.plusDays(1); index++
             }
-            if (updates.isNotEmpty()) repo.applyBulk(updates)
-            refreshWidgets()
+            if (updates.isNotEmpty()) {
+                repo.applyBulk(updates)
+                _patternUndoSnapshot.value = snapshot
+                _showPatternConfirmBar.value = true
+                refreshWidgets()
+            }
         }
         _showApplyPattern.value = false; _pendingPattern.value = emptyList()
         _patternStartDate.value = null; _patternAwaitingStart.value = false
+    }
+
+    fun acceptPatternApply() {
+        _patternUndoSnapshot.value = emptyMap()
+        _showPatternConfirmBar.value = false
+    }
+
+    fun undoPatternApply() {
+        val snapshot = _patternUndoSnapshot.value
+        if (snapshot.isEmpty()) {
+            _showPatternConfirmBar.value = false
+            return
+        }
+        viewModelScope.launch {
+            val updates = snapshot.mapKeys { (key, _) ->
+                val parts = key.split("-")
+                Triple(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+            }
+            repo.applyBulk(updates)
+            _patternUndoSnapshot.value = emptyMap()
+            _showPatternConfirmBar.value = false
+            refreshWidgets()
+        }
     }
 
     fun openStats() { _statsYearMonth.value = _currentMonth.value; _showStats.value = true }
