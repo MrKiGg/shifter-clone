@@ -22,12 +22,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,6 +87,7 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     val contracts by viewModel.contracts.collectAsState()
     val showPatternsList by viewModel.showPatternsList.collectAsState()
     val savedPatterns by viewModel.savedPatterns.collectAsState()
+    val showPatternConfirmBar by viewModel.showPatternConfirmBar.collectAsState()
 
     Scaffold(
         topBar = {
@@ -157,6 +160,12 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
                 PatternPickStartBanner(
                     patternLength = state.pendingPattern.size,
                     onCancel = { viewModel.cancelPatternAwaiting() }
+                )
+            }
+            if (showPatternConfirmBar) {
+                PatternApplyConfirmBar(
+                    onAccept = { viewModel.acceptPatternApply() },
+                    onUndo = { viewModel.undoPatternApply() }
                 )
             }
             when (state.topTab) {
@@ -312,6 +321,35 @@ internal fun MonthHeader(yearMonth: YearMonth, onPrevious: () -> Unit, onNext: (
         Text("$monthName ${yearMonth.year}".uppercase(Locale("es", "ES")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
         IconButton(onClick = onNext) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Mes siguiente", tint = Color(0xFF212121))
+        }
+    }
+}
+
+@Composable
+internal fun PatternApplyConfirmBar(
+    onAccept: () -> Unit,
+    onUndo: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF37474F))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            "Patron aplicado",
+            color = Color.White,
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onUndo) {
+            Icon(Icons.Default.Undo, contentDescription = "Revertir patron", tint = Color(0xFFFFCC80))
+        }
+        IconButton(onClick = onAccept) {
+            Icon(Icons.Default.Check, contentDescription = "Aceptar", tint = Color(0xFF81C784))
         }
     }
 }
