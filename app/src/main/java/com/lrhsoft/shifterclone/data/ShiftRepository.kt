@@ -10,6 +10,7 @@ import com.lrhsoft.shifterclone.model.CeladorCategory
 import com.lrhsoft.shifterclone.model.DayAssignment
 import com.lrhsoft.shifterclone.model.DayNote
 import com.lrhsoft.shifterclone.model.PayGroup
+import com.lrhsoft.shifterclone.model.SavedPattern
 import com.lrhsoft.shifterclone.model.Shift
 import com.lrhsoft.shifterclone.model.UserProfile
 import com.lrhsoft.shifterclone.model.WorkContract
@@ -27,6 +28,7 @@ class ShiftRepository(private val context: Context) {
     private val notesKey = stringPreferencesKey("notes")
     private val profileKey = stringPreferencesKey("user_profile")
     private val contractsKey = stringPreferencesKey("work_contracts")
+    private val patternsKey = stringPreferencesKey("saved_patterns")
 
     val shiftsFlow: Flow<List<Shift>> = context.dataStore.data.map { prefs ->
         val json = prefs[shiftsKey] ?: return@map Shift.DEFAULT_SHIFTS
@@ -69,14 +71,11 @@ class ShiftRepository(private val context: Context) {
     suspend fun applyBulk(updates: Map<Triple<Int, Int, Int>, List<String>>) {
         context.dataStore.edit { prefs ->
             val current = parseAssignments(prefs[assignmentsKey] ?: "{}").toMutableMap()
-            updates.forEach { (ymd, shiftIds) ->
+            updates.forEach { (ymd, ids) ->
                 val (year, month, day) = ymd
                 val key = DayAssignment.key(year, month, day)
-                if (shiftIds.isEmpty()) {
-                    current.remove(key)
-                } else {
-                    current[key] = DayAssignment(year, month, day, shiftIds)
-                }
+                if (ids.isEmpty()) current.remove(key)
+                else current[key] = DayAssignment(year, month, day, ids)
             }
             prefs[assignmentsKey] = assignmentsToJson(current)
         }
@@ -85,22 +84,19 @@ class ShiftRepository(private val context: Context) {
     private fun applyShiftToMap(
         map: MutableMap<String, DayAssignment>,
         year: Int, month: Int, day: Int,
-        shiftId: String?,
-        replace: Boolean
+        shiftId: String?, replace: Boolean
     ) {
         val key = DayAssignment.key(year, month, day)
-        val existing = map[key]?.shiftIds?.toMutableList() ?: mutableListOf()
         if (shiftId == null) {
             map.remove(key)
-        } else if (replace || existing.isEmpty()) {
+            return
+        }
+        val existing = map[key]?.shiftIds?.toMutableList() ?: mutableListOf()
+        if (replace) {
             map[key] = DayAssignment(year, month, day, listOf(shiftId))
         } else {
-            if (existing.size < 2 && !existing.contains(shiftId)) {
-                existing.add(shiftId)
-                map[key] = DayAssignment(year, month, day, existing)
-            } else {
-                map[key] = DayAssignment(year, month, day, listOf(shiftId))
-            }
+            if (!existing.contains(shiftId)) existing.add(shiftId)
+            map[key] = DayAssignment(year, month, day, existing)
         }
     }
 
@@ -112,11 +108,7 @@ class ShiftRepository(private val context: Context) {
     suspend fun saveNote(note: DayNote) {
         context.dataStore.edit { prefs ->
             val current = parseNotes(prefs[notesKey] ?: "{}").toMutableMap()
-            if (note.isEmpty) {
-                current.remove(note.key)
-            } else {
-                current[note.key] = note
-            }
+            current[DayNote.key(note.year, note.month, note.day)] = note
             prefs[notesKey] = notesToJson(current)
         }
     }
@@ -148,6 +140,17 @@ class ShiftRepository(private val context: Context) {
     suspend fun saveContracts(contracts: List<WorkContract>) {
         context.dataStore.edit { prefs ->
             prefs[contractsKey] = contractsToJson(contracts)
+        }
+    }
+
+    val patternsFlow: Flow<List<SavedPattern>> = context.dataStore.data.map { prefs ->
+        val json = prefs[patternsKey] ?: return@map emptyList()
+        parsePatterns(json)
+    }
+
+    suspend fun savePatterns(patterns: List<SavedPattern>) {
+        context.dataStore.edit { prefs ->
+            prefs[patternsKey] = patternsToJson(patterns)
         }
     }
 
@@ -184,12 +187,12 @@ class ShiftRepository(private val context: Context) {
                         abbreviation = o.getString("abbreviation"),
                         color = o.getLong("color"),
                         textColor = o.optLong("textColor", 0xFFFFFFFF),
-                        startHour = if (o.isNull("startHour")) null else o.getInt("startHour"),
-                        startMinute = if (o.isNull("startMinute")) null else o.getInt("startMinute"),
-                        endHour = if (o.isNull("endHour")) null else o.getInt("endHour"),
-                        endMinute = if (o.isNull("endMinute")) null else o.getInt("endMinute"),
+                        startHour = if (o.has("startHour") && !o.isNull("startHour")) o.getInt("startHour") else null,
+                        startMinute = if (o.has("startMinute") && !o.isNull("startMinute")) o.getInt("startMinute") else null,
+                        endHour = if (o.has("endHour") && !o.isNull("endHour")) o.getInt("endHour") else null,
+                        endMinute = if (o.has("endMinute") && !o.isNull("endMinute")) o.getInt("endMinute") else null,
                         isRest = o.optBoolean("isRest", false),
-                        hourlyRate = if (o.isNull("hourlyRate")) null else o.getDouble("hourlyRate")
+                        hourlyRate = if (o.has("hourlyRate") && !o.isNull("hourlyRate")) o.getDouble("hourlyRate") else null
                     )
                 )
             }
@@ -221,12 +224,7 @@ class ShiftRepository(private val context: Context) {
                 val ids = mutableListOf<String>()
                 val arr = o.getJSONArray("shiftIds")
                 for (i in 0 until arr.length()) ids.add(arr.getString(i))
-                result[key] = DayAssignment(
-                    year = o.getInt("year"),
-                    month = o.getInt("month"),
-                    day = o.getInt("day"),
-                    shiftIds = ids
-                )
+                result[key] = DayAssignment(o.getInt("year"), o.getInt("month"), o.getInt("day"), ids)
             }
             result
         } catch (e: Exception) {
@@ -262,8 +260,8 @@ class ShiftRepository(private val context: Context) {
                     month = o.getInt("month"),
                     day = o.getInt("day"),
                     text = o.optString("text", ""),
-                    alarmHour = if (o.isNull("alarmHour")) null else o.getInt("alarmHour"),
-                    alarmMinute = if (o.isNull("alarmMinute")) null else o.getInt("alarmMinute"),
+                    alarmHour = if (o.has("alarmHour") && !o.isNull("alarmHour")) o.getInt("alarmHour") else null,
+                    alarmMinute = if (o.has("alarmMinute") && !o.isNull("alarmMinute")) o.getInt("alarmMinute") else null,
                     alarmDayBefore = o.optBoolean("alarmDayBefore", false),
                     enabled = o.optBoolean("enabled", true)
                 )
@@ -274,8 +272,8 @@ class ShiftRepository(private val context: Context) {
         }
     }
 
-    private fun profileToJson(p: UserProfile): String {
-        return JSONObject().apply {
+    private fun profileToJson(p: UserProfile): String =
+        JSONObject().apply {
             put("category", p.category.name)
             put("group", p.group.name)
             put("destinoLevel", p.destinoLevel)
@@ -284,17 +282,12 @@ class ShiftRepository(private val context: Context) {
             put("horasNocheCompleta", p.horasNocheCompleta)
             put("countNightShiftAsFullNight", p.countNightShiftAsFullNight)
         }.toString()
-    }
 
     private fun parseProfile(json: String): UserProfile {
         return try {
             val o = JSONObject(json)
-            val cat = runCatching {
-                CeladorCategory.valueOf(o.optString("category", CeladorCategory.POLIVALENTE.name))
-            }.getOrDefault(CeladorCategory.POLIVALENTE)
-            val group = runCatching {
-                PayGroup.valueOf(o.optString("group", PayGroup.E.name))
-            }.getOrDefault(PayGroup.E)
+            val cat = runCatching { CeladorCategory.valueOf(o.optString("category", CeladorCategory.POLIVALENTE.name)) }.getOrDefault(CeladorCategory.POLIVALENTE)
+            val group = runCatching { PayGroup.valueOf(o.optString("group", PayGroup.E.name)) }.getOrDefault(PayGroup.E)
             UserProfile(
                 category = cat,
                 group = group,
@@ -342,6 +335,39 @@ class ShiftRepository(private val context: Context) {
                         notes = o.optString("notes", "")
                     )
                 )
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun patternsToJson(list: List<SavedPattern>): String {
+        val arr = JSONArray()
+        list.forEach { p ->
+            arr.put(JSONObject().apply {
+                put("id", p.id)
+                put("name", p.name)
+                val seq = JSONArray()
+                p.sequence.forEach { id -> if (id == null) seq.put(JSONObject.NULL) else seq.put(id) }
+                put("sequence", seq)
+            })
+        }
+        return arr.toString()
+    }
+
+    private fun parsePatterns(json: String): List<SavedPattern> {
+        return try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<SavedPattern>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val seqArr = o.getJSONArray("sequence")
+                val seq = mutableListOf<String?>()
+                for (j in 0 until seqArr.length()) {
+                    if (seqArr.isNull(j)) seq.add(null) else seq.add(seqArr.getString(j))
+                }
+                list.add(SavedPattern(id = o.getString("id"), name = o.optString("name", "Patron"), sequence = seq))
             }
             list
         } catch (e: Exception) {
