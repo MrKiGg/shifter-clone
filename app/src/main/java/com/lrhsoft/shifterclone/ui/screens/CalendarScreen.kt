@@ -62,6 +62,7 @@ import com.lrhsoft.shifterclone.ui.components.DayDetailSheet
 import com.lrhsoft.shifterclone.ui.components.ExportSheet
 import com.lrhsoft.shifterclone.ui.components.PatternBuilderDialog
 import com.lrhsoft.shifterclone.ui.components.PatternPickStartBanner
+import com.lrhsoft.shifterclone.ui.components.PatternsManagerSheet
 import com.lrhsoft.shifterclone.ui.components.ProfileSheet
 import com.lrhsoft.shifterclone.ui.components.ShiftEditorDialog
 import com.lrhsoft.shifterclone.ui.components.ShiftsManagerScreen
@@ -82,6 +83,8 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
     val showContracts by viewModel.showContracts.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
     val contracts by viewModel.contracts.collectAsState()
+    val showPatternsList by viewModel.showPatternsList.collectAsState()
+    val savedPatterns by viewModel.savedPatterns.collectAsState()
 
     Scaffold(
         topBar = {
@@ -134,7 +137,7 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
                 }
                 BottomModeBar(
                     mode = state.editMode,
-                    patternActive = state.patternAwaitingStart || state.showPatternBuilder,
+                    patternActive = state.patternAwaitingStart || state.showPatternBuilder || showPatternsList,
                     onPaint = { viewModel.togglePaintMode() },
                     onEdit = { viewModel.toggleEditMode() },
                     onPattern = { viewModel.openPatternBuilder() },
@@ -252,6 +255,15 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
             onExportToCalendar = { viewModel.exportToDeviceCalendar() },
             onShareIcs = { viewModel.buildIcsShareIntent()?.let { } },
             onDismiss = { viewModel.dismissExport() }
+        )
+    }
+    if (showPatternsList) {
+        PatternsManagerSheet(
+            patterns = savedPatterns,
+            shifts = state.shifts,
+            onDismiss = { viewModel.dismissPatternsList() },
+            onSavePatterns = { viewModel.savePatterns(it) },
+            onApplyPattern = { viewModel.applySavedPattern(it) }
         )
     }
     if (state.showPatternBuilder) {
