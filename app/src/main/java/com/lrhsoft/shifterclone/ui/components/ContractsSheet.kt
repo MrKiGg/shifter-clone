@@ -115,7 +115,7 @@ fun ContractsSheet(
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Contratos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Cerrar") }
             }
@@ -126,7 +126,7 @@ fun ContractsSheet(
             )
             Spacer(Modifier.height(12.dp))
 
-            Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ExposedDropdownMenuBox(expanded = yearExpanded, onExpandedChange = { yearExpanded = it }, modifier = Modifier.weight(1f)) {
                     OutlinedTextField(
                         value = filterYear.toString(), onValueChange = {}, readOnly = true, label = { Text("Ano") },
