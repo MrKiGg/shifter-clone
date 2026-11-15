@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lrhsoft.shifterclone.data.LaborRightsCalculator
 import com.lrhsoft.shifterclone.model.PayrollEstimate
 import com.lrhsoft.shifterclone.model.StatsSummary
 import java.time.YearMonth
@@ -49,6 +50,7 @@ fun StatsSheet(
     period: StatsPeriod,
     yearMonth: YearMonth,
     payroll: PayrollEstimate? = null,
+    laborRights: LaborRightsCalculator.RightsSummary? = null,
     onPeriodChange: (StatsPeriod) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -184,17 +186,144 @@ fun StatsSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
                 text = "Las horas se calculan con el horario de cada turno. Configura la tarifa EUR/h al editar un turno.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
 
+            // ── Derechos laborales Osakidetza (siempre visible) ──
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Derechos laborales (Osakidetza)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(Modifier.height(4.dp))
+
+            val rights = laborRights
+            if (rights == null || rights.contractDays <= 0) {
+                Text(
+                    text = "No hay contratos. Abre Contratos (icono maletin arriba) y anade el periodo de alta para ver vacaciones, AP y balance de jornada.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    lineHeight = 18.sp
+                )
+            } else {
+                Text(
+                    text = rights.vacationLiquidationNote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Text("Vacaciones", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard(
+                        label = "Generados",
+                        value = "${rights.vacationDaysGenerated} d",
+                        modifier = Modifier.weight(1f),
+                        accent = Color(0xFF00838F)
+                    )
+                    StatCard(
+                        label = "Dias alta",
+                        value = "${rights.contractDays}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = if (rights.vacationCanEnjoy) "Disfrute" else "Liquidacion",
+                        value = if (rights.vacationCanEnjoy) "Si (>90d)" else "Finiquito",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text("Asuntos Particulares (AP)", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "6 dias = 45 h/ano · ~7,5 h/2 meses · si hay ≥1 dia sin contrato se reinicia a 0",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard(
+                        label = "Generadas",
+                        value = "${rights.apHoursGenerated} h",
+                        modifier = Modifier.weight(1f),
+                        accent = Color(0xFF5E35B1)
+                    )
+                    StatCard(
+                        label = "Equiv. dias",
+                        value = "${rights.apDaysEquivalent} d",
+                        modifier = Modifier.weight(1f),
+                        accent = Color(0xFF4527A0)
+                    )
+                    StatCard(
+                        label = "Cadena actual",
+                        value = "${rights.currentChainDays} d",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text("Balance de jornada (1.592 h/ano)", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Factor noche ×${rights.nightFactor} · teorica con vac ${rights.theoreticalHoursWithVac} h",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard(
+                        label = "Trabajadas",
+                        value = "${rights.workedHoursEstimated} h",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "Balance",
+                        value = when {
+                            rights.balanceWithVac > 0.5 -> "+${rights.balanceWithVac} h"
+                            rights.balanceWithVac < -0.5 -> "${rights.balanceWithVac} h"
+                            else -> "0 h"
+                        },
+                        modifier = Modifier.weight(1f),
+                        accent = when {
+                            rights.balanceWithVac > 0.5 -> Color(0xFF2E7D32)
+                            rights.balanceWithVac < -0.5 -> Color(0xFFC62828)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                rights.notes.forEach { note ->
+                    Text(
+                        text = "· $note",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+
             if (payroll != null && period == StatsPeriod.MONTH) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(Modifier.height(20.dp))
                 HorizontalDivider()
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
                 Text(
                     text = "Estimacion nomina (bruto orientativo)",
                     fontWeight = FontWeight.Bold,
@@ -205,7 +334,7 @@ fun StatsSheet(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -222,20 +351,20 @@ fun StatsSheet(
                         accent = Color(0xFF1565C0)
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 StatCard(
                     label = "Total estimado",
                     value = String.format(Locale.US, "%.2f EUR", payroll.totalEstimated),
                     modifier = Modifier.fillMaxWidth(),
                     accent = Color(0xFF2E7D32)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = "Noches: ${payroll.nights} · Fest. dia: ${payroll.festivoDays} · Fest. noche: ${payroll.festivoNights}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 Text("Desglose", fontWeight = FontWeight.SemiBold)
                 payroll.breakdown.forEach { (label, amount) ->
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
