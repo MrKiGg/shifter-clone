@@ -106,40 +106,30 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
                     var expanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(
                         expanded = expanded,
-                        onExpandedChange = { expanded = it }
+                        onExpandedChange = { expanded = it },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        TextField(
-                            value = state.selectedCenter,
-                            onValueChange = {},
-                            readOnly = true,
-                            singleLine = true,
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                            },
-                            colors = TextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                disabledTextColor = Color.White,
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent,
-                                focusedTrailingIconColor = Color.White,
-                                unfocusedTrailingIconColor = Color.White,
-                                disabledTrailingIconColor = Color.White,
-                                cursorColor = Color.White
-                            ),
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            ),
+                        Row(
                             modifier = Modifier
                                 .menuAnchor()
                                 .fillMaxWidth()
-                        )
+                                .clickable { expanded = !expanded }
+                                .padding(end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            Text(
+                                text = state.selectedCenter,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                                modifier = Modifier.weight(1f, fill = true)
+                            )
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                        }
                         ExposedDropdownMenu(
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
