@@ -18,7 +18,15 @@ data class Shift(
     val endMinute: Int? = null,
     val isRest: Boolean = false,
     /** Tarifa por hora (€ u otra moneda). null = no calcular ingresos */
-    val hourlyRate: Double? = null
+    val hourlyRate: Double? = null,
+    /** Si true, al pintar este turno se programa automáticamente una alarma */
+    val autoAlarm: Boolean = false,
+    /** Hora por defecto de la alarma automática (0-23) */
+    val alarmHour: Int? = null,
+    /** Minuto por defecto de la alarma automática (0-59) */
+    val alarmMinute: Int? = null,
+    /** Si true, la alarma suena el día anterior al turno */
+    val alarmDayBefore: Boolean = false
 ) {
     fun toComposeColor(): Color = Color(color)
     fun toTextComposeColor(): Color = Color(textColor)
@@ -46,7 +54,10 @@ data class Shift(
                 color = 0xFF4CAF50,
                 startHour = 7, startMinute = 0,
                 endHour = 15, endMinute = 0,
-                hourlyRate = 12.0
+                hourlyRate = 12.0,
+                autoAlarm = true,
+                alarmHour = 6,
+                alarmMinute = 30
             ),
             Shift(
                 id = "default-tarde",
@@ -55,7 +66,10 @@ data class Shift(
                 color = 0xFFFF9800,
                 startHour = 15, startMinute = 0,
                 endHour = 23, endMinute = 0,
-                hourlyRate = 12.0
+                hourlyRate = 12.0,
+                autoAlarm = true,
+                alarmHour = 13,
+                alarmMinute = 0
             ),
             Shift(
                 id = "default-noche",
@@ -65,7 +79,10 @@ data class Shift(
                 textColor = 0xFFFFFFFF,
                 startHour = 23, startMinute = 0,
                 endHour = 7, endMinute = 0,
-                hourlyRate = 14.0
+                hourlyRate = 14.0,
+                autoAlarm = true,
+                alarmHour = 21,
+                alarmMinute = 0
             ),
             Shift(
                 id = "default-libre",
