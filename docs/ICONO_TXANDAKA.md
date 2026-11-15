@@ -2,27 +2,41 @@
 
 Fuente del logo: calendario TXANDAKA (`Egutegi-2.jpg`).
 
-## Generar con Android Studio (recomendado)
+## Estado en el repo
+
+- `drawable/ic_launcher_background.xml` — fondo `#1B1464`
+- `drawable/ic_launcher_foreground.xml` — vector calendario Txandaka (color)
+- `drawable/ic_launcher_monochrome.xml` — silueta blanca para **iconos temáticos** (Android 13+)
+- `mipmap-anydpi-v26/ic_launcher.xml` y `ic_launcher_round.xml` — adaptive con background + foreground + **monochrome**
+
+Con esto ya tienes icono adaptive y monochrome en GitHub **sin PNG**.
+
+## Icono fotorealista (tu imagen Egutegi-2.jpg)
+
+El conector de GitHub no sube bien binarios PNG. Usa una de estas opciones:
+
+### A) Android Studio Image Asset (recomendado)
 
 1. Clic derecho en `app` → **New** → **Image Asset**
-2. **Launcher Icons (Adaptive and Legacy)**
-3. **Foreground Layer** → Image → selecciona `Egutegi-2.jpg`
-4. **Background Layer** → Color → `#1B1464`
-5. Ajusta el scale (~90–100 %) para que el calendario quede centrado
-6. Next → Finish
+2. Launcher Icons (Adaptive and Legacy)
+3. Foreground → Image → `Egutegi-2.jpg`
+4. Background → Color → `#1B1464`
+5. Finish
 
-Android Studio genera solo todos los `mipmap-*` y el adaptive icon.
+### B) Pack generado en el proyecto Grok
 
-## Alternativa: pack generado
+Archivo: `txandaka_app_icon.zip` (mipmaps + foreground PNG + monochrome PNG).
 
-En el chat del proyecto hay un ZIP `txandaka_app_icon.zip` con:
-
-- `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png` (+ round)
-- `drawable-{densities}/ic_launcher_foreground.png`
-- `mipmap-anydpi-v26/ic_launcher.xml`
-- fondo sólido `#1B1464`
-
-Copia su contenido en `app/src/main/res/` y elimina el viejo `drawable/ic_launcher_foreground.xml` (vector) si sigue presente.
+```bash
+# Desde la raíz del repo, tras descomprimir el zip en /tmp/app_icon:
+cp -r /tmp/app_icon/mipmap-* app/src/main/res/
+cp -r /tmp/app_icon/drawable-* app/src/main/res/
+# Opcional: quitar el vector si prefieres solo PNG
+# rm app/src/main/res/drawable/ic_launcher_foreground.xml
+git add app/src/main/res
+git commit -m "feat(icon): PNGs launcher Txandaka desde Egutegi-2"
+git push
+```
 
 ## Manifest
 
