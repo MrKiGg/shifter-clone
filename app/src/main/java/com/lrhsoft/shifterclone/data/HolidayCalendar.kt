@@ -3,59 +3,62 @@ package com.lrhsoft.shifterclone.data
 import java.time.LocalDate
 
 /**
- * Festivos laborales de Euskadi (CAV) + Bizkaia + locales Bilbao / Barakaldo.
+ * Festivos laborales de Euskadi (CAV) + Bizkaia + locales por centro hospitalario.
  *
- * - CAV: decretos BOPV 2025–2027
- * - Bizkaia (territorio): 31 julio San Ignacio
- * - Bilbao: Viernes Semana Grande (agosto)
- * - Barakaldo: 16 julio Nuestra Señora del Carmen
+ * Centros de calendario:
+ * - Basurto (Bilbao): CAV + San Ignacio + Semana Grande Bilbao
+ * - Cruces (Barakaldo): CAV + San Ignacio + Carmen 16 jul
  */
 object HolidayCalendar {
 
-    val CENTERS = listOf("Bilbao", "Barakaldo")
+    /** Centros disponibles en el selector del calendario principal. */
+    val CENTERS = listOf("Basurto", "Cruces")
 
-    private val euskadiHolidays: Set<LocalDate> = setOf(
+    private val euskadiFixed: Set<LocalDate> = setOf(
         // 2025
         LocalDate.of(2025, 1, 1), LocalDate.of(2025, 1, 6),
-        LocalDate.of(2025, 4, 17), LocalDate.of(2025, 4, 18), LocalDate.of(2025, 4, 21),
-        LocalDate.of(2025, 5, 1), LocalDate.of(2025, 7, 25), LocalDate.of(2025, 8, 15),
-        LocalDate.of(2025, 11, 1), LocalDate.of(2025, 12, 6), LocalDate.of(2025, 12, 8),
-        LocalDate.of(2025, 12, 25),
+        LocalDate.of(2025, 4, 17), LocalDate.of(2025, 4, 18),
+        LocalDate.of(2025, 5, 1), LocalDate.of(2025, 8, 15),
+        LocalDate.of(2025, 10, 12), LocalDate.of(2025, 11, 1),
+        LocalDate.of(2025, 12, 6), LocalDate.of(2025, 12, 8), LocalDate.of(2025, 12, 25),
         // 2026
-        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 6), LocalDate.of(2026, 3, 19),
-        LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3), LocalDate.of(2026, 4, 6),
-        LocalDate.of(2026, 5, 1), LocalDate.of(2026, 7, 25), LocalDate.of(2026, 8, 15),
-        LocalDate.of(2026, 10, 12), LocalDate.of(2026, 12, 8), LocalDate.of(2026, 12, 25),
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 6),
+        LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3),
+        LocalDate.of(2026, 5, 1), LocalDate.of(2026, 8, 15),
+        LocalDate.of(2026, 10, 12), LocalDate.of(2026, 11, 1),
+        LocalDate.of(2026, 12, 6), LocalDate.of(2026, 12, 8), LocalDate.of(2026, 12, 25),
         // 2027
         LocalDate.of(2027, 1, 1), LocalDate.of(2027, 1, 6),
-        LocalDate.of(2027, 3, 25), LocalDate.of(2027, 3, 26), LocalDate.of(2027, 3, 29),
-        LocalDate.of(2027, 5, 1), LocalDate.of(2027, 10, 7), LocalDate.of(2027, 10, 12),
-        LocalDate.of(2027, 11, 1), LocalDate.of(2027, 12, 6), LocalDate.of(2027, 12, 8),
-        LocalDate.of(2027, 12, 25)
+        LocalDate.of(2027, 3, 25), LocalDate.of(2027, 3, 26),
+        LocalDate.of(2027, 5, 1), LocalDate.of(2027, 8, 15),
+        LocalDate.of(2027, 10, 12), LocalDate.of(2027, 11, 1),
+        LocalDate.of(2027, 12, 6), LocalDate.of(2027, 12, 8), LocalDate.of(2027, 12, 25)
     )
 
-    private val bizkaiaTerritory: Set<LocalDate> = setOf(
+    /** San Ignacio — territorio histórico de Bizkaia (31 julio). */
+    private val bizkaiaLocal: Set<LocalDate> = setOf(
         LocalDate.of(2025, 7, 31),
         LocalDate.of(2026, 7, 31),
         LocalDate.of(2027, 7, 31)
     )
 
+    /** Viernes de Semana Grande de Bilbao (agosto). */
     private val bilbaoLocal: Set<LocalDate> = setOf(
         LocalDate.of(2025, 8, 22),
-        LocalDate.of(2026, 8, 28),
-        LocalDate.of(2027, 8, 27)
+        LocalDate.of(2026, 8, 21),
+        LocalDate.of(2027, 8, 20)
     )
 
-    /** Nuestra Señora del Carmen — fiesta local de Barakaldo (16 de julio). */
+    /** Nuestra Señora del Carmen — fiesta local de Barakaldo / zona Cruces (16 julio). */
     private val barakaldoLocal: Set<LocalDate> = setOf(
         LocalDate.of(2025, 7, 16),
         LocalDate.of(2026, 7, 16),
         LocalDate.of(2027, 7, 16)
     )
 
-    /** Conjunto amplio (CAV + Bizkaia + Bilbao + Barakaldo). */
-    private val allHolidays: Set<LocalDate> =
-        euskadiHolidays + bizkaiaTerritory + bilbaoLocal + barakaldoLocal
+    private val baseBizkaia: Set<LocalDate> = euskadiFixed + bizkaiaLocal
+
+    private val allHolidays: Set<LocalDate> = baseBizkaia + bilbaoLocal + barakaldoLocal
 
     fun isHoliday(date: LocalDate): Boolean = date in allHolidays
 
@@ -63,17 +66,18 @@ object HolidayCalendar {
         date in holidaysFor(center)
 
     /**
-     * Festivos aplicables según centro del contrato.
-     * Por defecto (vacío / Bilbao): CAV + San Ignacio + Semana Grande Bilbao.
-     * Barakaldo: CAV + San Ignacio + Carmen 16 jul (sin Semana Grande Bilbao).
+     * Festivos según centro hospitalario.
+     * Basurto / Bilbao → Semana Grande; Cruces / Barakaldo → Carmen.
      */
     fun holidaysFor(center: String?): Set<LocalDate> {
         val c = center?.trim().orEmpty()
-        val base = euskadiHolidays + bizkaiaTerritory
         return when {
-            c.equals("Barakaldo", ignoreCase = true) -> base + barakaldoLocal
-            c.equals("Bilbao", ignoreCase = true) || c.isBlank() -> base + bilbaoLocal
-            else -> base + bilbaoLocal + barakaldoLocal
+            c.equals("Cruces", ignoreCase = true) ||
+                c.equals("Barakaldo", ignoreCase = true) -> baseBizkaia + barakaldoLocal
+            c.equals("Basurto", ignoreCase = true) ||
+                c.equals("Bilbao", ignoreCase = true) ||
+                c.isBlank() -> baseBizkaia + bilbaoLocal
+            else -> baseBizkaia + bilbaoLocal
         }
     }
 
