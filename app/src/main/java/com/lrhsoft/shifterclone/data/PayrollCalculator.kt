@@ -17,7 +17,7 @@ object PayrollCalculator {
      *
      * Conceptos fijos: importe_mes × días_de_alta / 30 (mes completo → 100 %).
      * Variables: según turnos pintados.
-     * Festivos: domingos + festivos oficiales CAV ([HolidayCalendar]).
+     * Festivos: domingos + festivos del centro del contrato (Bilbao / Barakaldo).
      * Dobles (manual Osakidetza):
      *  - Noches 24 y 31 de diciembre → ×2 nocturnidad
      *  - Mañana/tarde del 25 de diciembre y del 1 de enero → ×2 festivo día
@@ -33,6 +33,14 @@ object PayrollCalculator {
         val rates = PayrollTables.rates(profile.group)
         val shiftMap = shifts.associateBy { it.id }
         val daysInMonth = yearMonth.lengthOfMonth()
+        // Festivos según centros de los contratos del mes (por defecto Bilbao)
+        val monthCenters = contracts.filter { monthOverlapsContract(yearMonth, it) }
+            .map { it.center }.filter { it.isNotBlank() }.distinct()
+        val effectiveHolidays = if (holidays !== HolidayCalendar.all() && holidays.isNotEmpty()) {
+            holidays
+        } else {
+            HolidayCalendar.holidaysForCenters(monthCenters.ifEmpty { listOf("Bilbao") })
+        }
 
         var nights = 0
         var festivoDays = 0
@@ -68,17 +76,13 @@ object PayrollCalculator {
             dayShifts.forEach { distinctWorkShiftIds.add(it.id) }
 
             val isFestivo = date.dayOfWeek == DayOfWeek.SUNDAY ||
-                holidays.contains(date) ||
-                HolidayCalendar.isHoliday(date)
+                effectiveHolidays.contains(date)
 
             dayShifts.forEach { shift ->
                 val isNight = isNightShift(shift)
                 when {
                     isFestivo && isNight -> {
                         festivoNights++
-                        // Noche en festivo: tarifa festivo noche (ya incluye plus);
-                        // si además es 24/31 dic, el manual aplica doble a nocturnidad;
-                        // en práctica usamos festivoNoche ×2 en 24/31.
                         val mult = if (HolidayCalendar.isDoubleNightDate(date)) 2.0 else 1.0
                         if (mult > 1.0) doubleNightCount++
                         val amount = rates.festivoNoche * mult
