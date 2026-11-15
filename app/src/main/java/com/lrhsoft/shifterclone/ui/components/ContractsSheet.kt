@@ -232,14 +232,35 @@ private fun ContractForm(
     var name by remember { mutableStateOf(initial?.name ?: "Contrato") }
     var start by remember { mutableStateOf(initial?.startDate ?: LocalDate.now().toString()) }
     var end by remember { mutableStateOf(initial?.endDate ?: "") }
-    var center by remember { mutableStateOf(initial?.center ?: "") }
+    var center by remember {
+        mutableStateOf(initial?.center?.takeIf { it.isNotBlank() } ?: "Bilbao")
+    }
+    var centerExpanded by remember { mutableStateOf(false) }
     var turnicidad by remember { mutableStateOf(initial?.hasTurnicidad ?: true) }
     var pickStart by remember { mutableStateOf(false) }
     var pickEnd by remember { mutableStateOf(false) }
+    val centerOptions = listOf("Bilbao", "Barakaldo")
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = center, onValueChange = { center = it }, label = { Text("Centro / cartelera") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        ExposedDropdownMenuBox(expanded = centerExpanded, onExpandedChange = { centerExpanded = it }) {
+            OutlinedTextField(
+                value = center,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Centro") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(centerExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(expanded = centerExpanded, onDismissRequest = { centerExpanded = false }) {
+                centerOptions.forEach { opt ->
+                    DropdownMenuItem(
+                        text = { Text(opt) },
+                        onClick = { center = opt; centerExpanded = false }
+                    )
+                }
+            }
+        }
         DateField("Inicio", start, { start = it }) { pickStart = true }
         DateField("Fin (vacio = abierto)", end, { end = it }) { pickEnd = true }
         Row(verticalAlignment = Alignment.CenterVertically) {
