@@ -119,21 +119,26 @@ fun CalendarScreen(viewModel: CalendarViewModel = viewModel()) {
                             colors = TextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
+                                disabledTextColor = Color.White,
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
                                 disabledContainerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
                                 focusedTrailingIconColor = Color.White,
-                                unfocusedTrailingIconColor = Color.White
+                                unfocusedTrailingIconColor = Color.White,
+                                disabledTrailingIconColor = Color.White,
+                                cursorColor = Color.White
                             ),
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
+                                fontSize = 20.sp,
+                                color = Color.White
                             ),
                             modifier = Modifier
                                 .menuAnchor()
-                                .fillMaxWidth(0.55f)
+                                .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
                             expanded = expanded,
