@@ -3,11 +3,14 @@ package com.lrhsoft.shifterclone.data
 import java.time.LocalDate
 
 /**
- * Festivos laborales oficiales de la CAV (Euskadi), sin locales municipales.
- * Fuentes: decretos BOPV (2025 Decreto 49/2024, 2026 calendario oficial,
- * 2027 Decreto 90/2026).
+ * Festivos laborales de Euskadi (CAV) + Territorio Histórico de Bizkaia.
  *
- * Domingos ya se tratan aparte en [PayrollCalculator].
+ * - CAV: decretos BOPV (2025 Decreto 49/2024, 2026 Decreto 82/2025, 2027 Decreto 90/2026).
+ * - Bizkaia (todo el territorio): 31 de julio, San Ignacio de Loyola
+ *   (Resoluciones Delegación Territorial Trabajo Bizkaia).
+ * - Bilbao (2.ª local típica): Viernes de la Semana Grande (agosto).
+ *
+ * Domingos se tratan aparte en [PayrollCalculator].
  */
 object HolidayCalendar {
 
@@ -37,7 +40,7 @@ object HolidayCalendar {
         LocalDate.of(2026, 7, 25),  // Santiago Apóstol
         LocalDate.of(2026, 8, 15),  // Asunción
         LocalDate.of(2026, 10, 12), // Fiesta Nacional
-        // 1 nov y 6 dic 2026 caen en domingo → no listados como festivo laborable aparte
+        // 1 nov y 6 dic 2026 caen en domingo
         LocalDate.of(2026, 12, 8),  // Inmaculada
         LocalDate.of(2026, 12, 25), // Navidad
 
@@ -56,12 +59,37 @@ object HolidayCalendar {
         LocalDate.of(2027, 12, 25)  // Navidad
     )
 
-    fun isHoliday(date: LocalDate): Boolean = date in euskadiHolidays
+    /** Festivo local común a todo el Territorio Histórico de Bizkaia. */
+    private val bizkaiaTerritory: Set<LocalDate> = setOf(
+        LocalDate.of(2025, 7, 31), // San Ignacio de Loyola
+        LocalDate.of(2026, 7, 31), // San Ignacio de Loyola
+        LocalDate.of(2027, 7, 31)  // San Ignacio de Loyola
+    )
+
+    /**
+     * 2.ª fiesta local de Bilbao (Viernes de la Semana Grande).
+     * 2026: 28 ago · 2027: 27 ago (según resoluciones BOB).
+     */
+    private val bilbaoLocal: Set<LocalDate> = setOf(
+        LocalDate.of(2025, 8, 22), // Viernes Semana Grande 2025 (aprox. / habitual)
+        LocalDate.of(2026, 8, 28), // Viernes Semana Grande 2026
+        LocalDate.of(2027, 8, 27)  // Viernes Semana Grande 2027
+    )
+
+    private val allHolidays: Set<LocalDate> =
+        euskadiHolidays + bizkaiaTerritory + bilbaoLocal
+
+    fun isHoliday(date: LocalDate): Boolean = date in allHolidays
+
+    fun isEuskadiHoliday(date: LocalDate): Boolean = date in euskadiHolidays
+
+    fun isBizkaiaHoliday(date: LocalDate): Boolean =
+        date in bizkaiaTerritory || date in bilbaoLocal
 
     fun holidaysIn(year: Int): List<LocalDate> =
-        euskadiHolidays.filter { it.year == year }.sorted()
+        allHolidays.filter { it.year == year }.sorted()
 
-    fun all(): Set<LocalDate> = euskadiHolidays
+    fun all(): Set<LocalDate> = allHolidays
 
     /**
      * Manual Osakidetza: noches del 24 y 31 de diciembre → doble nocturnidad.
