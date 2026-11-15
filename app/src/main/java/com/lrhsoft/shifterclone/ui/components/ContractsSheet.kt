@@ -56,6 +56,8 @@ import java.util.UUID
 @Composable
 fun ContractsSheet(
     contracts: List<WorkContract>,
+    /** Mes visible en el calendario → filtro y fechas por defecto del formulario */
+    defaultYearMonth: YearMonth = YearMonth.now(),
     onSaveContracts: (List<WorkContract>) -> Unit,
     onOpenContract: (WorkContract) -> Unit,
     onDismiss: () -> Unit
@@ -64,14 +66,13 @@ fun ContractsSheet(
     var local by remember { mutableStateOf(contracts) }
     var editing by remember { mutableStateOf<WorkContract?>(null) }
     var showForm by remember { mutableStateOf(false) }
-    val now = YearMonth.now()
-    var filterYear by remember { mutableIntStateOf(now.year) }
-    var filterMonth by remember { mutableIntStateOf(now.monthValue) }
+    var filterYear by remember(defaultYearMonth) { mutableIntStateOf(defaultYearMonth.year) }
+    var filterMonth by remember(defaultYearMonth) { mutableIntStateOf(defaultYearMonth.monthValue) }
     var yearExpanded by remember { mutableStateOf(false) }
     var monthExpanded by remember { mutableStateOf(false) }
 
-    val years = remember(local) {
-        val ys = mutableSetOf(now.year, now.year - 1, now.year + 1)
+    val years = remember(local, defaultYearMonth) {
+        val ys = mutableSetOf(defaultYearMonth.year, defaultYearMonth.year - 1, defaultYearMonth.year + 1)
         local.forEach { c ->
             try {
                 ys.add(LocalDate.parse(c.startDate).year)
@@ -202,6 +203,7 @@ fun ContractsSheet(
                 Spacer(Modifier.height(6.dp))
                 ContractForm(
                     initial = editing,
+                    defaultYearMonth = defaultYearMonth,
                     onCancel = { showForm = false; editing = null },
                     onSave = { contract ->
                         local = if (editing != null) local.map { if (it.id == contract.id) contract else it } else local + contract
@@ -226,12 +228,19 @@ fun ContractsSheet(
 @Composable
 private fun ContractForm(
     initial: WorkContract?,
+    defaultYearMonth: YearMonth,
     onCancel: () -> Unit,
     onSave: (WorkContract) -> Unit
 ) {
+    val defaultStart = defaultYearMonth.atDay(1).toString()
+    val defaultEnd = defaultYearMonth.atEndOfMonth().toString()
     var name by remember { mutableStateOf(initial?.name ?: "Contrato") }
-    var start by remember { mutableStateOf(initial?.startDate ?: LocalDate.now().toString()) }
-    var end by remember { mutableStateOf(initial?.endDate ?: "") }
+    var start by remember(initial, defaultYearMonth) {
+        mutableStateOf(initial?.startDate ?: defaultStart)
+    }
+    var end by remember(initial, defaultYearMonth) {
+        mutableStateOf(initial?.endDate ?: defaultEnd)
+    }
     var center by remember {
         mutableStateOf(initial?.center?.takeIf { it.isNotBlank() } ?: "Bilbao")
     }
