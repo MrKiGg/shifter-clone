@@ -8,7 +8,6 @@ import com.lrhsoft.shifterclone.model.UserProfile
 import com.lrhsoft.shifterclone.model.WorkContract
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.Month
 import java.time.YearMonth
 
 object PayrollCalculator {
@@ -16,12 +15,12 @@ object PayrollCalculator {
     /**
      * Estimación de nómina del mes.
      *
-     * Conceptos fijos (sueldo, destino, específico, turnicidad, antigüedad):
-     *   importe_mes × días_de_alta / 30
-     * Si el periodo cubre el mes entero → 100 % del importe mensual.
-     * Confirmado con recibo Osakidetza 13-15/05/2024 (3 días → ×3/30).
-     *
-     * Variables (nocturnidad, festivos): solo días/turnos pintados en el calendario.
+     * Conceptos fijos: importe_mes × días_de_alta / 30 (mes completo → 100 %).
+     * Variables: según turnos pintados.
+     * Festivos: domingos + festivos oficiales CAV ([HolidayCalendar]).
+     * Dobles (manual Osakidetza):
+     *  - Noches 24 y 31 de diciembre → ×2 nocturnidad
+     *  - Mañana/tarde del 25 de diciembre y del 1 de enero → ×2 festivo día
      */
     fun estimateMonth(
         yearMonth: YearMonth,
@@ -29,7 +28,7 @@ object PayrollCalculator {
         assignments: Map<String, DayAssignment>,
         shifts: List<Shift>,
         contracts: List<WorkContract> = emptyList(),
-        holidays: Set<LocalDate> = emptySet()
+        holidays: Set<LocalDate> = HolidayCalendar.all()
     ): PayrollEstimate {
         val rates = PayrollTables.rates(profile.group)
         val shiftMap = shifts.associateBy { it.id }
@@ -39,10 +38,14 @@ object PayrollCalculator {
         var festivoDays = 0
         var festivoNights = 0
         var workDays = 0
+        var doubleNightCount = 0
+        var doubleFestivoDayCount = 0
         val distinctWorkShiftIds = mutableSetOf<String>()
         var variable = 0.0
+        var nocturnidadAmount = 0.0
+        var festivoDiaAmount = 0.0
+        var festivoNocheAmount = 0.0
 
-        // Días de alta en el mes (unión de contratos). Sin contratos → se asume mes completo.
         var contractDays = 0
         for (day in 1..daysInMonth) {
             val date = yearMonth.atDay(day)
@@ -59,41 +62,54 @@ object PayrollCalculator {
                 ?.filter { !it.isRest }
                 .orEmpty()
             if (dayShifts.isEmpty()) continue
-            // Solo contar actividad variable si el día está en contrato (o no hay contratos)
             if (!inContract) continue
 
             workDays++
             dayShifts.forEach { distinctWorkShiftIds.add(it.id) }
 
-            val isFestivo = date.dayOfWeek == DayOfWeek.SUNDAY || holidays.contains(date)
+            val isFestivo = date.dayOfWeek == DayOfWeek.SUNDAY ||
+                holidays.contains(date) ||
+                HolidayCalendar.isHoliday(date)
+
             dayShifts.forEach { shift ->
                 val isNight = isNightShift(shift)
                 when {
                     isFestivo && isNight -> {
                         festivoNights++
-                        variable += rates.festivoNoche
+                        // Noche en festivo: tarifa festivo noche (ya incluye plus);
+                        // si además es 24/31 dic, el manual aplica doble a nocturnidad;
+                        // en práctica usamos festivoNoche ×2 en 24/31.
+                        val mult = if (HolidayCalendar.isDoubleNightDate(date)) 2.0 else 1.0
+                        if (mult > 1.0) doubleNightCount++
+                        val amount = rates.festivoNoche * mult
+                        festivoNocheAmount += amount
+                        variable += amount
                     }
                     isFestivo && !isNight -> {
                         festivoDays++
-                        variable += rates.festivoDia
+                        val mult = if (HolidayCalendar.isDoubleFestivoDayShift(date)) 2.0 else 1.0
+                        if (mult > 1.0) doubleFestivoDayCount++
+                        val amount = rates.festivoDia * mult
+                        festivoDiaAmount += amount
+                        variable += amount
                     }
                     isNight -> {
                         nights++
-                        val amount = if (profile.countNightShiftAsFullNight) {
+                        val base = if (profile.countNightShiftAsFullNight) {
                             rates.nocturnidadNoche
                         } else {
                             rates.nocturnidadHora * profile.horasNocheCompleta
                         }
-                        val mult = if (date.month == Month.DECEMBER &&
-                            (date.dayOfMonth == 24 || date.dayOfMonth == 31)
-                        ) 2.0 else 1.0
-                        variable += amount * mult
+                        val mult = if (HolidayCalendar.isDoubleNightDate(date)) 2.0 else 1.0
+                        if (mult > 1.0) doubleNightCount++
+                        val amount = base * mult
+                        nocturnidadAmount += amount
+                        variable += amount
                     }
                 }
             }
         }
 
-        // Turnicidad: varios tipos de turno pintados o marcado en contrato/perfil
         val hasTurnicidad = profile.hasTurnicidad && (
             distinctWorkShiftIds.size >= 2 ||
                 contracts.any { c -> c.hasTurnicidad && monthOverlapsContract(yearMonth, c) } ||
@@ -112,7 +128,6 @@ object PayrollCalculator {
             fixedFull += "Turnicidad" to rates.turnicidadMes
         }
 
-        // Prorrateo Osakidetza: días_alta / 30; mes completo → 100 %
         val ratio = when {
             contractDays <= 0 -> 0.0
             contractDays >= daysInMonth -> 1.0
@@ -125,17 +140,24 @@ object PayrollCalculator {
         breakdown += "Dias de alta / contrato" to contractDays.toDouble()
         breakdown += "Prorrateo fijos (dias/30)" to ratio
         fixedFull.forEach { (label, amount) ->
-            breakdown += "$label" to amount * ratio
+            breakdown += label to amount * ratio
         }
-        if (nights > 0) {
-            breakdown += "Nocturnidad ($nights noches)" to
-                (if (profile.countNightShiftAsFullNight) rates.nocturnidadNoche else rates.nocturnidadHora * profile.horasNocheCompleta) * nights
+        if (nocturnidadAmount > 0) {
+            val label = if (doubleNightCount > 0)
+                "Nocturnidad ($nights noches, $doubleNightCount x2)"
+            else
+                "Nocturnidad ($nights noches)"
+            breakdown += label to nocturnidadAmount
         }
-        if (festivoDays > 0) {
-            breakdown += "Festivo/domingo dia ($festivoDays)" to rates.festivoDia * festivoDays
+        if (festivoDiaAmount > 0) {
+            val label = if (doubleFestivoDayCount > 0)
+                "Festivo/domingo dia ($festivoDays, $doubleFestivoDayCount x2)"
+            else
+                "Festivo/domingo dia ($festivoDays)"
+            breakdown += label to festivoDiaAmount
         }
-        if (festivoNights > 0) {
-            breakdown += "Festivo/domingo noche ($festivoNights)" to rates.festivoNoche * festivoNights
+        if (festivoNocheAmount > 0) {
+            breakdown += "Festivo/domingo noche ($festivoNights)" to festivoNocheAmount
         }
 
         return PayrollEstimate(
