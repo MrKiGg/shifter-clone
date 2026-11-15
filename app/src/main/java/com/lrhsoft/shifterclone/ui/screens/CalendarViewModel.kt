@@ -46,6 +46,7 @@ data class DateRange(val start: LocalDate, val end: LocalDate) {
 
 data class CalendarUiState(
     val currentMonth: YearMonth = YearMonth.now(),
+    val selectedCenter: String = "Basurto",
     val shifts: List<Shift> = emptyList(),
     val assignments: Map<String, DayAssignment> = emptyMap(),
     val notes: Map<String, DayNote> = emptyMap(),
@@ -135,12 +136,20 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     )
     private data class CoreState(
         val month: YearMonth, val shifts: List<Shift>,
-        val assignments: Map<String, DayAssignment>, val notes: Map<String, DayNote>
+        val assignments: Map<String, DayAssignment>, val notes: Map<String, DayNote>,
+        val selectedCenter: String
     )
 
     val uiState: StateFlow<CalendarUiState> = combine(
-        combine(_currentMonth, repo.shiftsFlow, repo.assignmentsFlow, repo.notesFlow) { month, shifts, assignments, notes ->
-            CoreState(month, shifts, assignments, notes)
+        combine(
+            _currentMonth,
+            repo.shiftsFlow,
+            repo.assignmentsByCenterFlow,
+            repo.notesFlow,
+            repo.selectedCenterFlow
+        ) { month, shifts, byCenter, notes, center ->
+            val assignments = byCenter[center] ?: emptyMap()
+            CoreState(month, shifts, assignments, notes, center)
         },
         combine(
             combine(_selectedShiftId, _isEraserSelected, _editMode) { a, b, c -> Triple(a, b, c) },
@@ -176,7 +185,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         val exportLoading = exportExtra[2] as Boolean
         val exportMessage = exportExtra[3] as String?
         CalendarUiState(
-            currentMonth = core.month, shifts = core.shifts, assignments = core.assignments, notes = core.notes,
+            currentMonth = core.month, selectedCenter = core.selectedCenter, shifts = core.shifts, assignments = core.assignments, notes = core.notes,
             selectedShiftId = modeState.selectedShiftId ?: core.shifts.firstOrNull()?.id,
             isEraserSelected = modeState.isEraserSelected, editMode = modeState.editMode,
             rangeStart = modeState.rangeStart, rangeEnd = modeState.rangeEnd,
@@ -229,6 +238,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     fun previousMonth() { _currentMonth.value = _currentMonth.value.minusMonths(1) }
     fun nextMonth() { _currentMonth.value = _currentMonth.value.plusMonths(1) }
+    fun setSelectedCenter(center: String) {
+        viewModelScope.launch { repo.setSelectedCenter(center) }
+    }
+
     fun goToToday() { _currentMonth.value = YearMonth.now() }
 
     fun setTopTab(tab: TopTab) {
@@ -276,7 +289,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     private fun paintDay(date: LocalDate) {
         if (_isEraserSelected.value) {
-            viewModelScope.launch { repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null); refreshWidgets() }; return
+            viewModelScope.launch {
+                repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null, center = uiState.value.selectedCenter)
+                refreshWidgets()
+            }; return
         }
         val selectedId = _selectedShiftId.value ?: return
         val state = uiState.value
@@ -284,8 +300,8 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             val key = DayAssignment.key(date.year, date.monthValue, date.dayOfMonth)
             val current = state.assignments[key]
             if (current != null && current.shiftIds.size == 1 && current.shiftIds[0] == selectedId)
-                repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null)
-            else repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, selectedId, replace = true)
+                repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, null, center = uiState.value.selectedCenter)
+            else repo.setShiftOnDay(date.year, date.monthValue, date.dayOfMonth, selectedId, replace = true, center = uiState.value.selectedCenter)
             refreshWidgets()
         }
     }
@@ -304,14 +320,14 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         val range = uiState.value.selectedRange ?: return
         val shiftId = _selectedShiftId.value ?: return
         viewModelScope.launch {
-            repo.applyBulk(range.days().associate { d -> Triple(d.year, d.monthValue, d.dayOfMonth) to listOf(shiftId) })
+            repo.applyBulk(range.days().associate { d -> Triple(d.year, d.monthValue, d.dayOfMonth) to listOf(shiftId) }, center = uiState.value.selectedCenter)
             refreshWidgets()
         }
     }
     fun clearRangeShifts() {
         val range = uiState.value.selectedRange ?: return
         viewModelScope.launch {
-            repo.applyBulk(range.days().associate { d -> Triple(d.year, d.monthValue, d.dayOfMonth) to emptyList() })
+            repo.applyBulk(range.days().associate { d -> Triple(d.year, d.monthValue, d.dayOfMonth) to emptyList() }, center = uiState.value.selectedCenter)
             refreshWidgets()
         }
     }
@@ -335,7 +351,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 updates[Triple(cursor.year, cursor.monthValue, cursor.dayOfMonth)] = pattern[index % patternLen]
                 cursor = cursor.plusDays(1); index++
             }
-            if (updates.isNotEmpty()) repo.applyBulk(updates)
+            if (updates.isNotEmpty()) repo.applyBulk(updates, center = uiState.value.selectedCenter)
             refreshWidgets()
         }
     }
@@ -440,7 +456,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 cursor = cursor.plusDays(1); index++
             }
             if (updates.isNotEmpty()) {
-                repo.applyBulk(updates)
+                repo.applyBulk(updates, center = uiState.value.selectedCenter)
                 _patternUndoSnapshot.value = snapshot
                 _showPatternConfirmBar.value = true
                 refreshWidgets()
@@ -466,7 +482,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 val parts = key.split("-")
                 Triple(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
             }
-            repo.applyBulk(updates)
+            repo.applyBulk(updates, center = uiState.value.selectedCenter)
             _patternUndoSnapshot.value = emptyMap()
             _showPatternConfirmBar.value = false
             refreshWidgets()
