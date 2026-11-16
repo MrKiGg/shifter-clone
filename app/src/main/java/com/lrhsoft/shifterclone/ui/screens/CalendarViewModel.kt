@@ -233,8 +233,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         _topTab.value = TopTab.MONTH
         _showContracts.value = false
     }
-    fun saveProfile(profile: UserProfile) { viewModelScope.launch { repo.saveProfile(profile) }
-    }
+    fun saveProfile(profile: UserProfile) { viewModelScope.launch { repo.saveProfile(profile) } }
     fun saveContracts(list: List<WorkContract>) { viewModelScope.launch { repo.saveContracts(list) } }
 
     fun estimatePayroll(
