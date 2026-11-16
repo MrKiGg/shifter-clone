@@ -70,6 +70,8 @@ fun CalendarDayCell(
         else -> Color(0xFF212121)
     }
 
+    val hasVisibleNote = isCurrentMonth && !noteText.isNullOrBlank()
+
     Box(
         modifier = modifier
             .border(width = borderWidth, color = borderColor, shape = shape)
@@ -127,7 +129,7 @@ fun CalendarDayCell(
                     )
                 }
 
-                if (shifts.isNotEmpty() && isCurrentMonth) {
+                if (shifts.isNotEmpty() && isCurrentMonth && !hasVisibleNote) {
                     shifts.take(2).forEach { shift ->
                         Text(
                             text = shift.abbreviation,
@@ -140,22 +142,20 @@ fun CalendarDayCell(
                             textAlign = TextAlign.Center
                         )
                     }
+                } else if (shifts.isNotEmpty() && isCurrentMonth && hasVisibleNote) {
+                    Text(
+                        text = shifts.first().abbreviation,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = shifts.first().toTextComposeColor().copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
                 }
 
-                if (isCurrentMonth && !noteText.isNullOrBlank()) {
-                    Text(
-                        text = noteText,
-                        fontSize = 9.sp,
-                        color = contentColor.copy(alpha = 0.9f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 10.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 1.dp),
-                        textAlign = TextAlign.Start
-                    )
-                } else if (isCurrentMonth && hasNote) {
+                if (isCurrentMonth && hasNote && !hasVisibleNote) {
                     Box(
                         modifier = Modifier
                             .padding(top = 2.dp)
@@ -166,6 +166,29 @@ fun CalendarDayCell(
                                 else MaterialTheme.colorScheme.primary
                             )
                             .align(Alignment.CenterHorizontally)
+                    )
+                }
+            }
+
+            if (hasVisibleNote) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 16.dp, start = 2.dp, end = 2.dp, bottom = 2.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color.White.copy(alpha = 0.55f))
+                        .padding(horizontal = 3.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = noteText.orEmpty(),
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1A1A1A),
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
