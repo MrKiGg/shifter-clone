@@ -31,6 +31,7 @@ class ShiftRepository(private val context: Context) {
     private val patternsKey = stringPreferencesKey("saved_patterns")
     private val selectedCenterKey = stringPreferencesKey("selected_center")
     private val assignmentsByCenterKey = stringPreferencesKey("assignments_by_center")
+    private val centerNamesKey = stringPreferencesKey("center_names")
 
     val shiftsFlow: Flow<List<Shift>> = context.dataStore.data.map { prefs ->
         val json = prefs[shiftsKey] ?: return@map Shift.DEFAULT_SHIFTS
@@ -181,6 +182,76 @@ class ShiftRepository(private val context: Context) {
     suspend fun setSelectedCenter(center: String) {
         context.dataStore.edit { prefs ->
             prefs[selectedCenterKey] = center
+        }
+    }
+
+    /** Nombres de los 5 slots de centro (estilo CALENDARIOS del original). */
+    val centerNamesFlow: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        parseCenterNames(prefs[centerNamesKey])
+    }
+
+    suspend fun saveCenterNames(names: List<String>) {
+        context.dataStore.edit { prefs ->
+            val normalized = normalizeCenterNames(names)
+            prefs[centerNamesKey] = centerNamesToJson(normalized)
+        }
+    }
+
+    /**
+     * Renombra el slot [index] (0..4). Si era el centro seleccionado,
+     * actualiza selectedCenter y migra las assignments a la nueva clave.
+     */
+    suspend fun renameCenter(index: Int, newName: String) {
+        context.dataStore.edit { prefs ->
+            val names = normalizeCenterNames(parseCenterNames(prefs[centerNamesKey])).toMutableList()
+            if (index !in names.indices) return@edit
+            val oldName = names[index]
+            val trimmed = newName.trim().ifBlank { "Sin nombre" }
+            if (oldName == trimmed) return@edit
+            names[index] = trimmed
+            prefs[centerNamesKey] = centerNamesToJson(names)
+
+            val selected = prefs[selectedCenterKey]?.takeIf { it.isNotBlank() } ?: "Basurto"
+            if (selected == oldName) {
+                prefs[selectedCenterKey] = trimmed
+            }
+
+            val byCenter = loadAssignmentsByCenter(prefs).toMutableMap()
+            if (byCenter.containsKey(oldName)) {
+                val days = byCenter.remove(oldName) ?: emptyMap()
+                val existing = byCenter[trimmed] ?: emptyMap()
+                byCenter[trimmed] = existing + days
+                prefs[assignmentsByCenterKey] = assignmentsByCenterToJson(byCenter)
+            }
+        }
+    }
+
+    private fun normalizeCenterNames(names: List<String>): List<String> {
+        val defaults = listOf("Basurto", "Cruces", "Sin nombre", "Sin nombre", "Sin nombre")
+        val out = MutableList(5) { i ->
+            names.getOrNull(i)?.trim()?.takeIf { it.isNotEmpty() } ?: defaults[i]
+        }
+        if (names.isEmpty()) return defaults
+        return out
+    }
+
+    private fun centerNamesToJson(names: List<String>): String {
+        val arr = JSONArray()
+        normalizeCenterNames(names).forEach { arr.put(it) }
+        return arr.toString()
+    }
+
+    private fun parseCenterNames(json: String?): List<String> {
+        if (json.isNullOrBlank()) {
+            return listOf("Basurto", "Cruces", "Sin nombre", "Sin nombre", "Sin nombre")
+        }
+        return try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) list.add(arr.getString(i))
+            normalizeCenterNames(list)
+        } catch (e: Exception) {
+            listOf("Basurto", "Cruces", "Sin nombre", "Sin nombre", "Sin nombre")
         }
     }
 
